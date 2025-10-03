@@ -51,40 +51,89 @@ const Auth = () => {
       if (isLogin) {
         loginSchema.parse({ username, password });
 
-        // Get email from username
-        const { data: emailData, error: emailError } = await supabase.rpc(
-          'get_email_by_username',
-          { input_username: username.trim() }
-        );
+        try {
+          // Get email from username with rate limiting
+          const { data: emailData, error: emailError } = await supabase.rpc(
+            'get_email_by_username_rate_limited',
+            { input_username: username.trim() }
+          );
 
-        // Generic error to prevent username enumeration
-        if (emailError || !emailData) {
+          // Generic error to prevent username enumeration
+          if (emailError) {
+            // Check if it's a rate limit error
+            if (emailError.message?.includes('Too many login attempts')) {
+              toast({
+                title: "Too many attempts",
+                description: "Please wait a few minutes before trying again.",
+                variant: "destructive",
+              });
+              await supabase.rpc('record_login_attempt', {
+                identifier_text: username.trim(),
+                was_successful: false
+              });
+              return;
+            }
+            
+            // Generic error for any other issue
+            toast({
+              title: "Login failed",
+              description: "Invalid credentials. Please check your username and password.",
+              variant: "destructive",
+            });
+            await supabase.rpc('record_login_attempt', {
+              identifier_text: username.trim(),
+              was_successful: false
+            });
+            return;
+          }
+
+          if (!emailData) {
+            toast({
+              title: "Login failed",
+              description: "Invalid credentials. Please check your username and password.",
+              variant: "destructive",
+            });
+            await supabase.rpc('record_login_attempt', {
+              identifier_text: username.trim(),
+              was_successful: false
+            });
+            return;
+          }
+
+          const { error } = await supabase.auth.signInWithPassword({
+            email: emailData,
+            password,
+          });
+
+          if (error) {
+            // Generic error message to prevent username enumeration
+            toast({
+              title: "Login failed",
+              description: "Invalid credentials. Please check your username and password.",
+              variant: "destructive",
+            });
+            await supabase.rpc('record_login_attempt', {
+              identifier_text: username.trim(),
+              was_successful: false
+            });
+          } else {
+            // Record successful login
+            await supabase.rpc('record_login_attempt', {
+              identifier_text: username.trim(),
+              was_successful: true
+            });
+            toast({
+              title: "Welcome back!",
+              description: "Successfully logged in.",
+            });
+            navigate("/");
+          }
+        } catch (error) {
           toast({
             title: "Login failed",
-            description: "Invalid credentials. Please check your username and password.",
+            description: "An error occurred. Please try again.",
             variant: "destructive",
           });
-          return;
-        }
-
-        const { error } = await supabase.auth.signInWithPassword({
-          email: emailData,
-          password,
-        });
-
-        if (error) {
-          // Generic error message to prevent username enumeration
-          toast({
-            title: "Login failed",
-            description: "Invalid credentials. Please check your username and password.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Welcome back!",
-            description: "Successfully logged in.",
-          });
-          navigate("/");
         }
       } else {
         signupSchema.parse({ 
@@ -94,22 +143,6 @@ const Auth = () => {
           displayName, 
           phoneNumber: phoneNumber || undefined 
         });
-
-        // Check if username already exists
-        const { data: existingUsername } = await supabase
-          .from('profiles')
-          .select('username')
-          .eq('username', username.trim())
-          .single();
-
-        if (existingUsername) {
-          toast({
-            title: "Username taken",
-            description: "This username is already in use. Please choose another.",
-            variant: "destructive",
-          });
-          return;
-        }
         const redirectUrl = `${window.location.origin}/`;
         
         // Generate email if not provided (required by Supabase Auth)
@@ -126,6 +159,16 @@ const Auth = () => {
             },
           },
         });
+
+        // Check for duplicate username after signup attempt
+        if (error && error.message.includes("duplicate key value violates unique constraint")) {
+          toast({
+            title: "Registration failed",
+            description: "An account with this information already exists. Please try a different username.",
+            variant: "destructive",
+          });
+          return;
+        }
 
         // Update profile with phone number if provided
         if (!error && authData.user && phoneNumber) {

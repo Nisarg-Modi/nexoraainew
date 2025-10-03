@@ -85,6 +85,27 @@ export type Database = {
         }
         Relationships: []
       }
+      login_attempts: {
+        Row: {
+          attempt_time: string
+          id: string
+          identifier: string
+          success: boolean
+        }
+        Insert: {
+          attempt_time?: string
+          id?: string
+          identifier: string
+          success?: boolean
+        }
+        Update: {
+          attempt_time?: string
+          id?: string
+          identifier?: string
+          success?: boolean
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           ai_generated: boolean | null
@@ -175,6 +196,10 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
+      check_login_rate_limit: {
+        Args: { identifier_text: string }
+        Returns: boolean
+      }
       check_message_rate_limit: {
         Args: { conv_id: string; user_uuid: string }
         Returns: boolean
@@ -194,6 +219,10 @@ export type Database = {
       is_conversation_participant: {
         Args: { conversation_uuid: string; user_uuid: string }
         Returns: boolean
+      }
+      record_login_attempt: {
+        Args: { identifier_text: string; was_successful: boolean }
+        Returns: undefined
       }
     }
     Enums: {
