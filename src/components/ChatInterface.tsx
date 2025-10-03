@@ -39,7 +39,8 @@ const ChatInterface = ({
   useEffect(() => {
     if (conversationId) {
       fetchMessages();
-      subscribeToMessages();
+      const cleanup = subscribeToMessages();
+      return cleanup;
     }
   }, [conversationId]);
 
@@ -90,7 +91,7 @@ const ChatInterface = ({
   };
 
   const subscribeToMessages = () => {
-    if (!conversationId) return;
+    if (!conversationId) return () => {};
 
     const channel = supabase
       .channel(`messages:${conversationId}`)
@@ -102,20 +103,26 @@ const ChatInterface = ({
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        async (payload) => {
+        (payload) => {
           const newMsg = payload.new;
-          const currentUser = (await supabase.auth.getUser()).data.user;
           
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: newMsg.id,
-              text: newMsg.content,
-              sender: newMsg.sender_id === currentUser?.id ? 'user' : 'contact',
-              timestamp: new Date(newMsg.created_at),
-              aiGenerated: newMsg.ai_generated,
-            },
-          ]);
+          setMessages((prev) => {
+            // Avoid duplicate messages
+            if (prev.some(m => m.id === newMsg.id)) {
+              return prev;
+            }
+            
+            return [
+              ...prev,
+              {
+                id: newMsg.id,
+                text: newMsg.content,
+                sender: newMsg.sender_id === contactUserId ? 'contact' : 'user',
+                timestamp: new Date(newMsg.created_at),
+                aiGenerated: newMsg.ai_generated,
+              },
+            ];
+          });
         }
       )
       .subscribe();
