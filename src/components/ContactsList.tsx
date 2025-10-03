@@ -81,7 +81,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
             .from('profiles')
             .select('display_name, status, avatar_url')
             .eq('user_id', contact.contact_user_id)
-            .single();
+            .maybeSingle();
 
           return {
             ...contact,
@@ -126,7 +126,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
         .from('profiles')
         .select('user_id, display_name')
         .eq('phone_number', phoneNumber.trim())
-        .single();
+        .maybeSingle();
 
       if (profileError || !profileData) {
         toast({
