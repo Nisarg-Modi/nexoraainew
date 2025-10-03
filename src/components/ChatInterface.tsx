@@ -204,17 +204,14 @@ const ChatInterface = ({
     if (!conversationId) return;
 
     try {
-      toast({
-        title: "Transcribing...",
-        description: "Converting your voice to text",
-      });
-
-      // Call transcription edge function
       const { data, error } = await supabase.functions.invoke('transcribe-audio', {
         body: { audioData },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Transcription error:', error);
+        throw new Error('Transcription service unavailable');
+      }
 
       const transcription = data?.transcription;
       
@@ -239,13 +236,15 @@ const ChatInterface = ({
 
       toast({
         title: "Voice message sent",
-        description: `Transcribed: "${transcription.substring(0, 50)}${transcription.length > 50 ? '...' : ''}"`,
+        description: transcription.length > 50 
+          ? `"${transcription.substring(0, 50)}..."` 
+          : `"${transcription}"`,
       });
     } catch (error) {
       console.error('Error processing voice message:', error);
       toast({
-        title: "Error",
-        description: "Failed to process voice message",
+        title: "Voice message failed",
+        description: error instanceof Error ? error.message : "Failed to process voice message",
         variant: "destructive",
       });
     }

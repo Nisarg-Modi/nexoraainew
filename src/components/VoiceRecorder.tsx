@@ -40,6 +40,16 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplete, disa
           // Remove data URL prefix
           const base64Data = base64.split(',')[1];
           onRecordingComplete(base64Data);
+          setIsProcessing(false); // Reset processing state
+        };
+        
+        reader.onerror = () => {
+          setIsProcessing(false); // Reset on error
+          toast({
+            title: "Error",
+            description: "Failed to process audio",
+            variant: "destructive",
+          });
         };
         
         reader.readAsDataURL(blob);
