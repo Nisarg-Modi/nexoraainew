@@ -8,7 +8,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Mercury Design System - Cosmic Security Theme */
+    /* Nexora Design System - Turquoise & Navy Theme */
     --background: 222 47% 5%;
     --foreground: 210 40% 98%;
 
@@ -18,17 +18,17 @@ All colors MUST be HSL.
     --popover: 222 40% 8%;
     --popover-foreground: 210 40% 98%;
 
-    /* Primary: Electric Purple - AI & Intelligence */
-    --primary: 270 70% 60%;
+    /* Primary: Turquoise/Cyan - Connection & Innovation */
+    --primary: 185 60% 50%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 270 70% 70%;
+    --primary-glow: 185 70% 60%;
 
-    /* Secondary: Cyber Blue - Security & Trust */
-    --secondary: 220 80% 50%;
+    /* Secondary: Navy Blue - Trust & Professionalism */
+    --secondary: 210 85% 30%;
     --secondary-foreground: 0 0% 100%;
 
-    /* Accent: Neon Green - Active/Success States */
-    --accent: 140 70% 55%;
+    /* Accent: Bright Cyan - Active/Success States */
+    --accent: 170 70% 55%;
     --accent-foreground: 222 47% 5%;
 
     --muted: 222 40% 15%;
@@ -39,17 +39,17 @@ All colors MUST be HSL.
 
     --border: 222 30% 18%;
     --input: 222 30% 18%;
-    --ring: 270 70% 60%;
-
+    --ring: 185 60% 50%;
+    
     --radius: 0.75rem;
     
     /* Custom gradients */
-    --gradient-aurora: linear-gradient(135deg, hsl(270 70% 60%) 0%, hsl(220 80% 50%) 100%);
+    --gradient-aurora: linear-gradient(135deg, hsl(185 60% 50%) 0%, hsl(210 85% 30%) 100%);
     --gradient-cosmic: linear-gradient(180deg, hsl(222 47% 5%) 0%, hsl(222 40% 8%) 100%);
-    --gradient-glow: radial-gradient(circle at 50% 50%, hsl(270 70% 60% / 0.15) 0%, transparent 70%);
+    --gradient-glow: radial-gradient(circle at 50% 50%, hsl(185 60% 50% / 0.15) 0%, transparent 70%);
     
     /* Shadows */
-    --shadow-ai: 0 0 30px hsl(270 70% 60% / 0.3);
+    --shadow-ai: 0 0 30px hsl(185 60% 50% / 0.3);
     --shadow-card: 0 8px 32px hsl(222 47% 5% / 0.5);
     
     /* Animations */
@@ -79,9 +79,9 @@ All colors MUST be HSL.
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
-    --primary: 270 70% 50%;
-    --secondary: 220 80% 45%;
-    --accent: 140 70% 45%;
+    --primary: 185 60% 45%;
+    --secondary: 210 85% 35%;
+    --accent: 170 70% 50%;
     --muted: 210 40% 96%;
     --border: 214 32% 91%;
   }

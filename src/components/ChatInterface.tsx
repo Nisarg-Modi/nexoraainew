@@ -265,7 +265,7 @@ const ChatInterface = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Message with Mercury AI..."
+              placeholder="Message with Nexora AI..."
               className="bg-muted border-border pr-24"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
@@ -297,7 +297,7 @@ const ChatInterface = ({
         </div>
         <p className="text-xs text-muted-foreground mt-2 text-center">
           <Shield className="w-3 h-3 inline mr-1" />
-          End-to-end encrypted · Mercury AI processes locally
+          End-to-end encrypted · Nexora AI processes locally
         </p>
       </div>
     </div>

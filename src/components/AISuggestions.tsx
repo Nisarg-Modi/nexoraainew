@@ -34,7 +34,7 @@ const AISuggestions = ({ currentText, onSelectSuggestion, onClose }: AISuggestio
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary animate-glow-pulse" />
-          <h3 className="font-semibold">Mercury AI Assistant</h3>
+          <h3 className="font-semibold">Nexora AI Assistant</h3>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
           <X className="w-4 h-4" />

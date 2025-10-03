@@ -133,7 +133,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
       if (profileError || !profileData) {
         toast({
           title: "User not found",
-          description: "No Mercury user found with this phone number",
+          description: "No Nexora user found with this phone number",
           variant: "destructive",
         });
         return;
@@ -246,7 +246,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
               <DialogHeader>
                 <DialogTitle>Add New Contact</DialogTitle>
                 <DialogDescription>
-                  Enter a phone number to find and add a Mercury user to your contacts
+                  Enter a phone number to find and add a Nexora user to your contacts
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-4">
@@ -261,7 +261,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
                     maxLength={15}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Enter the Mercury user's phone number
+                    Enter the Nexora user's phone number
                   </p>
                 </div>
                 <div className="space-y-2">

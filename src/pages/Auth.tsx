@@ -119,7 +119,7 @@ const Auth = () => {
         const redirectUrl = `${window.location.origin}/`;
         
         // Generate email if not provided (required by Supabase Auth)
-        const userEmail = email.trim() || `${username.trim()}@mercury.internal`;
+        const userEmail = email.trim() || `${username.trim()}@nexora.internal`;
         
         const { data: authData, error } = await supabase.auth.signUp({
           email: userEmail,
@@ -158,7 +158,7 @@ const Auth = () => {
         } else {
           toast({
             title: "Account created!",
-            description: "Welcome to Mercury. You can now start chatting.",
+            description: "Welcome to Nexora. You can now start chatting.",
           });
           navigate("/");
         }
@@ -192,12 +192,14 @@ const Auth = () => {
       <Card className="w-full max-w-md p-8 bg-card/80 backdrop-blur-xl border-border/50 relative z-10">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-secondary mb-4 animate-glow-pulse">
-            <Sparkles className="w-8 h-8" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/src/assets/nexora-logo.png" alt="Nexora" className="h-16" />
           </div>
-          <h1 className="text-3xl font-bold gradient-text mb-2">Mercury</h1>
-          <p className="text-muted-foreground">
-            {isLogin ? "Welcome back" : "Join the secure messaging revolution"}
+          <p className="text-lg text-primary font-semibold mb-2">
+            Smarter Chats, Stronger Bonds.
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {isLogin ? "Welcome back" : "Join the intelligent messaging platform"}
           </p>
         </div>
 

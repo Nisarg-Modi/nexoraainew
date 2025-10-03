@@ -4,6 +4,7 @@ import { Shield, Sparkles, Globe, Zap, LogOut } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
 import ContactsList from "@/components/ContactsList";
 import { useAuth } from "@/hooks/useAuth";
+import nexoraLogo from "@/assets/nexora-logo.png";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
@@ -33,7 +34,9 @@ const Index = () => {
       <div className="min-h-screen bg-background relative">
         {/* Header with sign out */}
         <div className="sticky top-0 z-20 bg-card/80 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center justify-between">
-          <h1 className="text-xl font-bold gradient-text">Mercury</h1>
+          <div className="flex items-center gap-2">
+            <img src={nexoraLogo} alt="Nexora" className="h-8" />
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -77,23 +80,18 @@ const Index = () => {
         <div className="text-center max-w-4xl mx-auto space-y-8 animate-slide-up">
           {/* Logo */}
           <div className="flex justify-center mb-6">
-            <div className="relative">
-              <div className="absolute inset-0 bg-primary/30 blur-xl rounded-full" />
-              <div className="relative bg-card border border-primary/30 rounded-full p-6 glow-ai">
-                <Zap className="w-12 h-12 text-primary" />
-              </div>
-            </div>
+            <img src={nexoraLogo} alt="Nexora" className="h-24 md:h-32" />
           </div>
 
           {/* Headline */}
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
-            <span className="gradient-text">Mercury</span>
+            <span className="gradient-text">Nexora</span>
           </h1>
-          <p className="text-2xl md:text-3xl text-muted-foreground font-light">
-            The Next-Gen AI-Native Messaging Platform
+          <p className="text-2xl md:text-3xl text-primary font-light">
+            Smarter Chats, Stronger Bonds.
           </p>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Experience hyper-private, intelligent communication. End-to-end encrypted messages enhanced by on-device AI that understands context, shifts tone, and translates in real-time.
+            Experience intelligent communication with end-to-end encryption. AI-powered features that understand context, enhance conversations, and keep you connected.
           </p>
 
           {/* CTA Buttons */}
@@ -104,7 +102,7 @@ const Index = () => {
               className="bg-primary hover:bg-primary-glow text-primary-foreground shadow-lg glow-hover text-lg px-8 py-6"
             >
               <Sparkles className="mr-2 w-5 h-5" />
-              Try Mercury AI
+              Try Nexora AI
             </Button>
             <Button 
               variant="outline"
@@ -133,7 +131,7 @@ const Index = () => {
           />
           <FeatureCard
             icon={<Sparkles className="w-8 h-8 text-primary" />}
-            title="Mercury AI Assistant"
+            title="Nexora AI Assistant"
             description="Context-aware AI that drafts replies, shifts tone, and translates—all while preserving E2EE."
           />
           <FeatureCard
