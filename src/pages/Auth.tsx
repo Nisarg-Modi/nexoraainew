@@ -57,10 +57,11 @@ const Auth = () => {
           { input_username: username.trim() }
         );
 
+        // Generic error to prevent username enumeration
         if (emailError || !emailData) {
           toast({
             title: "Login failed",
-            description: "Username not found. Please check your username.",
+            description: "Invalid credentials. Please check your username and password.",
             variant: "destructive",
           });
           return;
@@ -72,19 +73,12 @@ const Auth = () => {
         });
 
         if (error) {
-          if (error.message.includes("Invalid login credentials")) {
-            toast({
-              title: "Login failed",
-              description: "Invalid username or password. Please try again.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: error.message,
-              variant: "destructive",
-            });
-          }
+          // Generic error message to prevent username enumeration
+          toast({
+            title: "Login failed",
+            description: "Invalid credentials. Please check your username and password.",
+            variant: "destructive",
+          });
         } else {
           toast({
             title: "Welcome back!",

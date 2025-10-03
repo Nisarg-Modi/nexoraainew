@@ -167,7 +167,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_profile: {
+        Args: { profile_user_id: string; viewer_id: string }
+        Returns: boolean
+      }
+      check_contact_rate_limit: {
+        Args: { user_uuid: string }
+        Returns: boolean
+      }
+      check_message_rate_limit: {
+        Args: { conv_id: string; user_uuid: string }
+        Returns: boolean
+      }
       get_email_by_username: {
+        Args: { input_username: string }
+        Returns: string
+      }
+      get_email_by_username_rate_limited: {
         Args: { input_username: string }
         Returns: string
       }

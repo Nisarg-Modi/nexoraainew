@@ -173,9 +173,15 @@ const ChatInterface = ({
 
     if (error) {
       console.error('Error sending message:', error);
+      
+      const errorMessage = error.message?.toLowerCase().includes('rate limit') || 
+                          error.message?.toLowerCase().includes('check_message_rate_limit')
+        ? "You've reached the message limit (100 messages per hour in this conversation). Please slow down."
+        : "Failed to send message. Please try again.";
+      
       toast({
         title: "Error",
-        description: "Failed to send message",
+        description: errorMessage,
         variant: "destructive",
       });
       setInputText(messageContent);

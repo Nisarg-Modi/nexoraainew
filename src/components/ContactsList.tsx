@@ -167,6 +167,13 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
             description: "This contact is already in your list",
             variant: "destructive",
           });
+        } else if (contactError.message?.toLowerCase().includes('rate limit') || 
+                   contactError.message?.toLowerCase().includes('check_contact_rate_limit')) {
+          toast({
+            title: "Rate limit reached",
+            description: "You've added 10 contacts in the last hour. Please try again later.",
+            variant: "destructive",
+          });
         } else {
           toast({
             title: "Error",
