@@ -109,30 +109,39 @@ export type Database = {
       messages: {
         Row: {
           ai_generated: boolean | null
-          content: string
+          audio_data: string | null
+          content: string | null
           conversation_id: string
           created_at: string
           id: string
+          message_type: string | null
           read_at: string | null
           sender_id: string
+          transcription: string | null
         }
         Insert: {
           ai_generated?: boolean | null
-          content: string
+          audio_data?: string | null
+          content?: string | null
           conversation_id: string
           created_at?: string
           id?: string
+          message_type?: string | null
           read_at?: string | null
           sender_id: string
+          transcription?: string | null
         }
         Update: {
           ai_generated?: boolean | null
-          content?: string
+          audio_data?: string | null
+          content?: string | null
           conversation_id?: string
           created_at?: string
           id?: string
+          message_type?: string | null
           read_at?: string | null
           sender_id?: string
+          transcription?: string | null
         }
         Relationships: [
           {
