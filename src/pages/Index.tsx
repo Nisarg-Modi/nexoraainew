@@ -91,7 +91,7 @@ const Index = () => {
             Smarter chats, stronger bonds, brighter future.
           </p>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Experience intelligent communication with end-to-end encryption. AI-powered features that understand context, enhance conversations, and keep you connected.
+            Experience intelligent communication with secure TLS encryption. AI-powered features that understand context, enhance conversations, and keep you connected.
           </p>
 
           {/* CTA Buttons */}
@@ -115,10 +115,10 @@ const Index = () => {
 
           {/* Feature Pills */}
           <div className="flex flex-wrap gap-4 justify-center pt-12">
-            <FeaturePill icon={<Shield className="w-4 h-4" />} text="Post-Quantum E2EE" />
+            <FeaturePill icon={<Shield className="w-4 h-4" />} text="TLS Encrypted" />
             <FeaturePill icon={<Sparkles className="w-4 h-4" />} text="AI Tone Shifting" />
             <FeaturePill icon={<Globe className="w-4 h-4" />} text="Live Translation" />
-            <FeaturePill icon={<Zap className="w-4 h-4" />} text="Offline-First" />
+            <FeaturePill icon={<Zap className="w-4 h-4" />} text="Smart Features" />
           </div>
         </div>
 
@@ -126,13 +126,13 @@ const Index = () => {
         <div className="grid md:grid-cols-3 gap-6 mt-24 max-w-6xl mx-auto">
           <FeatureCard
             icon={<Shield className="w-8 h-8 text-secondary" />}
-            title="Zero-Knowledge Security"
-            description="Military-grade encryption with post-quantum cryptography. Your data, your keys, your privacy."
+            title="Secure Communication"
+            description="Industry-standard TLS encryption protects your messages in transit and stored securely on our servers."
           />
           <FeatureCard
             icon={<Sparkles className="w-8 h-8 text-primary" />}
             title="Nexora AI Assistant"
-            description="Context-aware AI that drafts replies, shifts tone, and translates—all while preserving E2EE."
+            description="Context-aware AI that drafts replies, shifts tone, and translates—enhancing your conversations."
           />
           <FeatureCard
             icon={<Zap className="w-8 h-8 text-accent" />}

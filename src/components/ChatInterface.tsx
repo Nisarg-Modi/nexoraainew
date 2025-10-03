@@ -213,7 +213,7 @@ const ChatInterface = ({
             <h2 className="font-semibold">{contactName}</h2>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <span className="w-2 h-2 bg-accent rounded-full" />
-              Online · E2EE Active
+              Online · Encrypted Connection
             </p>
           </div>
         </div>
@@ -307,7 +307,7 @@ const ChatInterface = ({
         </div>
         <p className="text-xs text-muted-foreground mt-2 text-center">
           <Shield className="w-3 h-3 inline mr-1" />
-          End-to-end encrypted · Nexora AI processes locally
+          Encrypted in transit · AI-powered suggestions
         </p>
       </div>
     </div>
