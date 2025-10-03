@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import AISuggestions from "./AISuggestions";
+import ChatSummarizer from "./ChatSummarizer";
 
 interface Message {
   id: string;
@@ -217,13 +218,7 @@ const ChatInterface = ({
             </p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-primary hover:bg-primary/10"
-        >
-          <Sparkles className="w-5 h-5" />
-        </Button>
+        {conversationId && <ChatSummarizer conversationId={conversationId} />}
       </div>
 
       {/* Messages */}
