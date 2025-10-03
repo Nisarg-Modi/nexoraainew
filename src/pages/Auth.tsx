@@ -8,6 +8,7 @@ import { Sparkles, Shield, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import nexoraLogo from "@/assets/nexora-logo.png";
 
 const loginSchema = z.object({
   username: z.string().trim().min(3, "Username must be at least 3 characters").max(30, "Username too long"),
@@ -230,7 +231,7 @@ const Auth = () => {
         {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-4">
-            <img src="/src/assets/nexora-logo.png" alt="Nexora" className="h-16" />
+            <img src={nexoraLogo} alt="Nexora" className="h-16" />
           </div>
           <p className="text-lg text-primary font-semibold mb-2">
             Smarter chats, stronger bonds, brighter future.
