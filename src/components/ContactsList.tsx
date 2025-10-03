@@ -73,19 +73,16 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
       return;
     }
 
-    // Fetch profile data for each contact (excluding phone_number for privacy)
+    // Fetch profile data for each contact using secure function (excludes phone_number)
     if (data) {
       const contactsWithProfiles = await Promise.all(
         data.map(async (contact) => {
           const { data: profile } = await supabase
-            .from('profiles')
-            .select('display_name, status, avatar_url')
-            .eq('user_id', contact.contact_user_id)
-            .maybeSingle();
+            .rpc('get_safe_profile', { profile_user_id: contact.contact_user_id });
 
           return {
             ...contact,
-            profiles: profile || {
+            profiles: profile?.[0] || {
               display_name: null,
               status: null,
               avatar_url: null,
