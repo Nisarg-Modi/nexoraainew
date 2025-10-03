@@ -9,10 +9,10 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* Nexora Design System - Turquoise & Navy Theme */
-    --background: 222 47% 5%;
+    --background: 222 30% 12%;
     --foreground: 210 40% 98%;
 
-    --card: 222 40% 8%;
+    --card: 222 25% 18%;
     --card-foreground: 210 40% 98%;
 
     --popover: 222 40% 8%;
