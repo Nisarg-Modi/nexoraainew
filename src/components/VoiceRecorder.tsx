@@ -43,30 +43,29 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplete, disa
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
         setIsRecording(true);
         toast({
-          title: "Recording started",
-          description: "Speak your message",
+          title: "Listening...",
+          description: "Start speaking now",
         });
       };
 
       recognition.onresult = (event: any) => {
         let finalTranscript = '';
-        let interimTranscript = '';
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
             finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
           }
         }
 
         if (finalTranscript) {
           transcriptRef.current += finalTranscript;
+          console.log('Captured:', finalTranscript);
         }
       };
 
@@ -74,7 +73,13 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplete, disa
         console.error('Speech recognition error:', event.error);
         setIsRecording(false);
         
-        if (event.error !== 'aborted') {
+        if (event.error === 'no-speech') {
+          toast({
+            title: "No speech detected",
+            description: "Please speak clearly and try again",
+            variant: "destructive",
+          });
+        } else if (event.error !== 'aborted') {
           toast({
             title: "Error",
             description: `Speech recognition error: ${event.error}`,
@@ -86,18 +91,11 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplete, disa
       recognition.onend = () => {
         setIsRecording(false);
         
-        if (transcriptRef.current.trim()) {
-          onRecordingComplete(transcriptRef.current.trim());
-          toast({
-            title: "Message transcribed",
-            description: transcriptRef.current.trim().substring(0, 50) + (transcriptRef.current.length > 50 ? '...' : ''),
-          });
-        } else {
-          toast({
-            title: "No speech detected",
-            description: "Please try again",
-            variant: "destructive",
-          });
+        const finalText = transcriptRef.current.trim();
+        console.log('Final transcript:', finalText);
+        
+        if (finalText) {
+          onRecordingComplete(finalText);
         }
         
         transcriptRef.current = '';
@@ -117,6 +115,16 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplete, disa
 
   const stopRecording = () => {
     if (recognitionRef.current && isRecording) {
+      const finalText = transcriptRef.current.trim();
+      
+      if (!finalText) {
+        toast({
+          title: "No speech detected",
+          description: "Please speak before stopping the recording",
+          variant: "destructive",
+        });
+      }
+      
       recognitionRef.current.stop();
     }
   };
