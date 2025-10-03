@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      contacts: {
+        Row: {
+          contact_name: string | null
+          contact_user_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          contact_name?: string | null
+          contact_user_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          contact_name?: string | null
+          contact_user_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversation_participants: {
         Row: {
           conversation_id: string
@@ -106,6 +130,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          phone_number: string | null
           status: string | null
           updated_at: string
           user_id: string
@@ -116,6 +141,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          phone_number?: string | null
           status?: string | null
           updated_at?: string
           user_id: string
@@ -126,6 +152,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          phone_number?: string | null
           status?: string | null
           updated_at?: string
           user_id?: string
@@ -137,7 +164,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_or_create_conversation: {
+        Args: { other_user_id: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

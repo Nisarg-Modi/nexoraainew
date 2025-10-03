@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Send, Sparkles, Languages, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import AISuggestions from "./AISuggestions";
 
 interface Message {
@@ -13,30 +15,115 @@ interface Message {
   aiGenerated?: boolean;
 }
 
-const ChatInterface = ({ onBack }: { onBack: () => void }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      text: "Hey! Have you tried Mercury yet?",
-      sender: "contact",
-      timestamp: new Date(Date.now() - 300000),
-    },
-    {
-      id: "2",
-      text: "Yes! The AI features are incredible. The tone shifting is a game changer.",
-      sender: "user",
-      timestamp: new Date(Date.now() - 240000),
-    },
-    {
-      id: "3",
-      text: "Right?! And it's all end-to-end encrypted. Privacy + intelligence.",
-      sender: "contact",
-      timestamp: new Date(Date.now() - 180000),
-    },
-  ]);
+const ChatInterface = ({ 
+  contactUserId, 
+  contactName, 
+  onBack 
+}: { 
+  contactUserId: string;
+  contactName: string;
+  onBack: () => void;
+}) => {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    initializeConversation();
+  }, [contactUserId]);
+
+  useEffect(() => {
+    if (conversationId) {
+      fetchMessages();
+      subscribeToMessages();
+    }
+  }, [conversationId]);
+
+  const initializeConversation = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_or_create_conversation', {
+        other_user_id: contactUserId,
+      });
+
+      if (error) throw error;
+      setConversationId(data);
+    } catch (error) {
+      console.error('Error initializing conversation:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start conversation",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMessages = async () => {
+    if (!conversationId) return;
+
+    const { data: userData } = await supabase.auth.getUser();
+    const currentUserId = userData.user?.id;
+
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching messages:', error);
+    } else {
+      const formattedMessages: Message[] = data.map((msg) => ({
+        id: msg.id,
+        text: msg.content,
+        sender: msg.sender_id === currentUserId ? 'user' : 'contact',
+        timestamp: new Date(msg.created_at),
+        aiGenerated: msg.ai_generated,
+      }));
+      setMessages(formattedMessages);
+    }
+  };
+
+  const subscribeToMessages = () => {
+    if (!conversationId) return;
+
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        async (payload) => {
+          const newMsg = payload.new;
+          const currentUser = (await supabase.auth.getUser()).data.user;
+          
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: newMsg.id,
+              text: newMsg.content,
+              sender: newMsg.sender_id === currentUser?.id ? 'user' : 'contact',
+              timestamp: new Date(newMsg.created_at),
+              aiGenerated: newMsg.ai_generated,
+            },
+          ]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -46,31 +133,29 @@ const ChatInterface = ({ onBack }: { onBack: () => void }) => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const handleSend = async () => {
+    if (!inputText.trim() || !conversationId) return;
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text: inputText,
-      sender: "user",
-      timestamp: new Date(),
-    };
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
 
-    setMessages([...messages, newMessage]);
-    setInputText("");
-    setShowAISuggestions(false);
+    const { error } = await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      sender_id: userData.user.id,
+      content: inputText.trim(),
+    });
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Mercury AI is analyzing the conversation context...",
-        sender: "ai",
-        timestamp: new Date(),
-        aiGenerated: true,
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-    }, 1000);
+    if (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      });
+    } else {
+      setInputText("");
+      setShowAISuggestions(false);
+    }
   };
 
   const handleAISuggestion = (suggestion: string) => {
@@ -92,10 +177,10 @@ const ChatInterface = ({ onBack }: { onBack: () => void }) => {
         </Button>
         <div className="flex items-center gap-3 flex-1">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            <span className="font-semibold">AJ</span>
+            <span className="font-semibold">{contactName[0].toUpperCase()}</span>
           </div>
           <div>
-            <h2 className="font-semibold">Alex Johnson</h2>
+            <h2 className="font-semibold">{contactName}</h2>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <span className="w-2 h-2 bg-accent rounded-full" />
               Online · E2EE Active
@@ -113,9 +198,22 @@ const ChatInterface = ({ onBack }: { onBack: () => void }) => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center space-y-2">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-muted-foreground text-sm">Loading conversation...</p>
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">No messages yet. Start the conversation!</p>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <MessageBubble key={message.id} message={message} contactName={contactName} />
+          ))
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -182,7 +280,7 @@ const ChatInterface = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-const MessageBubble = ({ message }: { message: Message }) => {
+const MessageBubble = ({ message, contactName }: { message: Message; contactName: string }) => {
   const isUser = message.sender === "user";
   const isAI = message.sender === "ai";
 
@@ -198,7 +296,7 @@ const MessageBubble = ({ message }: { message: Message }) => {
           {isAI ? (
             <Sparkles className="w-4 h-4" />
           ) : (
-            <span className="text-xs font-semibold">AJ</span>
+            <span className="text-xs font-semibold">{contactName[0].toUpperCase()}</span>
           )}
         </div>
       )}

@@ -2,14 +2,52 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Shield, Sparkles, Globe, Zap, LogOut } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
+import ContactsList from "@/components/ContactsList";
 import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
-  const [showChat, setShowChat] = useState(false);
+  const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
+  const [selectedContact, setSelectedContact] = useState<{ userId: string; name: string } | null>(null);
   const { signOut, user } = useAuth();
 
-  if (showChat) {
-    return <ChatInterface onBack={() => setShowChat(false)} />;
+  const handleStartChat = (contactUserId: string, contactName: string) => {
+    setSelectedContact({ userId: contactUserId, name: contactName });
+    setCurrentView('chat');
+  };
+
+  if (currentView === 'chat' && selectedContact) {
+    return (
+      <ChatInterface
+        contactUserId={selectedContact.userId}
+        contactName={selectedContact.name}
+        onBack={() => {
+          setCurrentView('contacts');
+          setSelectedContact(null);
+        }}
+      />
+    );
+  }
+
+  if (currentView === 'contacts') {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            {user?.email}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={signOut}
+            className="hover:bg-primary/10"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
+        <ContactsList onStartChat={handleStartChat} />
+      </div>
+    );
   }
 
   return (
@@ -62,7 +100,7 @@ const Index = () => {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
             <Button 
-              onClick={() => setShowChat(true)}
+              onClick={() => setCurrentView('contacts')}
               size="lg"
               className="bg-primary hover:bg-primary-glow text-primary-foreground shadow-lg glow-hover text-lg px-8 py-6"
             >

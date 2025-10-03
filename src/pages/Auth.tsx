@@ -13,6 +13,7 @@ const authSchema = z.object({
   email: z.string().email("Invalid email address").max(255, "Email too long"),
   password: z.string().min(8, "Password must be at least 8 characters").max(100, "Password too long"),
   displayName: z.string().trim().min(2, "Display name must be at least 2 characters").max(50, "Display name too long").optional(),
+  phoneNumber: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format (use E.164 format: +1234567890)").optional(),
 });
 
 const Auth = () => {
@@ -20,6 +21,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -41,7 +43,7 @@ const Auth = () => {
       // Validate input
       const validationData = isLogin 
         ? { email, password }
-        : { email, password, displayName };
+        : { email, password, displayName, phoneNumber: phoneNumber || undefined };
       
       authSchema.parse(validationData);
 
@@ -75,7 +77,7 @@ const Auth = () => {
       } else {
         const redirectUrl = `${window.location.origin}/`;
         
-        const { error } = await supabase.auth.signUp({
+        const { data: authData, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
@@ -85,6 +87,14 @@ const Auth = () => {
             },
           },
         });
+
+        // Update profile with phone number if provided
+        if (!error && authData.user && phoneNumber) {
+          await supabase
+            .from('profiles')
+            .update({ phone_number: phoneNumber.trim() })
+            .eq('user_id', authData.user.id);
+        }
 
         if (error) {
           if (error.message.includes("User already registered")) {
@@ -149,18 +159,35 @@ const Auth = () => {
         {/* Auth Form */}
         <form onSubmit={handleAuth} className="space-y-4">
           {!isLogin && (
-            <div className="space-y-2">
-              <Label htmlFor="displayName">Display Name</Label>
-              <Input
-                id="displayName"
-                type="text"
-                placeholder="How should we call you?"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="bg-muted border-border"
-                maxLength={50}
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Display Name</Label>
+                <Input
+                  id="displayName"
+                  type="text"
+                  placeholder="How should we call you?"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="bg-muted border-border"
+                  maxLength={50}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone Number (optional)</Label>
+                <Input
+                  id="phoneNumber"
+                  type="tel"
+                  placeholder="+1234567890"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="bg-muted border-border"
+                  maxLength={15}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use international format with + (e.g., +1234567890)
+                </p>
+              </div>
+            </>
           )}
 
           <div className="space-y-2">
@@ -213,6 +240,7 @@ const Auth = () => {
             onClick={() => {
               setIsLogin(!isLogin);
               setDisplayName("");
+              setPhoneNumber("");
             }}
             className="text-sm text-muted-foreground hover:text-primary transition-colors"
           >
