@@ -30,18 +30,20 @@ const Index = () => {
 
   if (currentView === 'contacts') {
     return (
-      <div className="min-h-screen bg-background">
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={signOut}
-          className="hover:bg-primary/10"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
-      </div>
+      <div className="min-h-screen bg-background relative">
+        {/* Header with sign out */}
+        <div className="sticky top-0 z-20 bg-card/80 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center justify-between">
+          <h1 className="text-xl font-bold gradient-text">Mercury</h1>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={signOut}
+            className="hover:bg-primary/10"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
         <ContactsList onStartChat={handleStartChat} />
       </div>
     );
