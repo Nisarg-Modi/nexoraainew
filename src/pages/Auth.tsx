@@ -196,7 +196,7 @@ const Auth = () => {
             <img src="/src/assets/nexora-logo.png" alt="Nexora" className="h-16" />
           </div>
           <p className="text-lg text-primary font-semibold mb-2">
-            Smarter Chats, Stronger Bonds.
+            Smarter chats, stronger bonds, brighter future.
           </p>
           <p className="text-muted-foreground text-sm">
             {isLogin ? "Welcome back" : "Join the intelligent messaging platform"}

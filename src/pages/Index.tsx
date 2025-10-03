@@ -88,7 +88,7 @@ const Index = () => {
             <span className="gradient-text">Nexora</span>
           </h1>
           <p className="text-2xl md:text-3xl text-primary font-light">
-            Smarter Chats, Stronger Bonds.
+            Smarter chats, stronger bonds, brighter future.
           </p>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Experience intelligent communication with end-to-end encryption. AI-powered features that understand context, enhance conversations, and keep you connected.
