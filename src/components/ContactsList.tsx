@@ -16,7 +16,6 @@ interface Contact {
   contact_name: string | null;
   profiles: {
     display_name: string | null;
-    phone_number: string | null;
     status: string | null;
     avatar_url: string | null;
   };
@@ -74,13 +73,13 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
       return;
     }
 
-    // Fetch profile data for each contact
+    // Fetch profile data for each contact (excluding phone_number for privacy)
     if (data) {
       const contactsWithProfiles = await Promise.all(
         data.map(async (contact) => {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('display_name, phone_number, status, avatar_url')
+            .select('display_name, status, avatar_url')
             .eq('user_id', contact.contact_user_id)
             .single();
 
@@ -88,7 +87,6 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
             ...contact,
             profiles: profile || {
               display_name: null,
-              phone_number: null,
               status: null,
               avatar_url: null,
             },
@@ -205,9 +203,8 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
 
   const filteredContacts = contacts.filter(contact => {
     const name = contact.contact_name || contact.profiles?.display_name || '';
-    const phone = contact.profiles?.phone_number || '';
     const query = searchQuery.toLowerCase();
-    return name.toLowerCase().includes(query) || phone.includes(query);
+    return name.toLowerCase().includes(query);
   });
 
   const getAvatarColor = (userId: string) => {
