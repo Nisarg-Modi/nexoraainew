@@ -251,6 +251,10 @@ const ChatInterface = ({
       {showAISuggestions && (
         <AISuggestions
           currentText={inputText}
+          conversationContext={messages.map(msg => ({
+            sender: msg.sender === 'user' ? 'You' : contactName,
+            text: msg.text
+          }))}
           onSelectSuggestion={handleAISuggestion}
           onClose={() => setShowAISuggestions(false)}
         />

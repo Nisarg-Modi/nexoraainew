@@ -1,26 +1,64 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Message {
+  sender: string;
+  text: string;
+}
 
 interface AISuggestionsProps {
   currentText: string;
+  conversationContext: Message[];
   onSelectSuggestion: (text: string) => void;
   onClose: () => void;
 }
 
 type Tone = "professional" | "casual" | "witty" | "empathetic";
 
-const toneExamples: Record<Tone, string> = {
-  professional: "I appreciate your message and would like to discuss this further at your earliest convenience.",
-  casual: "Hey! Yeah, that sounds great. Let me know when works for you!",
-  witty: "Well, well, well... look who's back! Count me in, this should be interesting 😄",
-  empathetic: "I completely understand where you're coming from. Let's find a time to talk through this together.",
-};
+interface Suggestion {
+  tone: Tone;
+  text: string;
+}
 
-const AISuggestions = ({ currentText, onSelectSuggestion, onClose }: AISuggestionsProps) => {
+const AISuggestions = ({ currentText, conversationContext, onSelectSuggestion, onClose }: AISuggestionsProps) => {
   const [selectedTone, setSelectedTone] = useState<Tone>("casual");
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (conversationContext.length > 0) {
+      fetchSuggestions();
+    }
+  }, [conversationContext]);
+
+  const fetchSuggestions = async () => {
+    setIsLoading(true);
+    try {
+      const lastMessages = conversationContext.slice(-5);
+      const { data, error } = await supabase.functions.invoke('generate-reply-suggestions', {
+        body: {
+          conversationContext: lastMessages,
+          currentMessage: conversationContext[conversationContext.length - 1]?.text || ''
+        }
+      });
+
+      if (error) throw error;
+      
+      if (data?.suggestions && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+      }
+    } catch (error) {
+      console.error('Error fetching AI suggestions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const currentSuggestion = suggestions.find(s => s.tone === selectedTone);
 
   const quickReplies = [
     "Sounds good!",
@@ -63,18 +101,29 @@ const AISuggestions = ({ currentText, onSelectSuggestion, onClose }: AISuggestio
       </div>
 
       {/* AI Generated Response */}
-      <Card className="p-3 mb-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/30 cursor-pointer hover:border-primary/50 transition-all glow-hover"
-            onClick={() => onSelectSuggestion(toneExamples[selectedTone])}>
-        <div className="flex items-start gap-2">
-          <Sparkles className="w-4 h-4 text-primary mt-1 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm">{toneExamples[selectedTone]}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Click to use · Generated with {selectedTone} tone
-            </p>
+      {isLoading ? (
+        <Card className="p-3 mb-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/30">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 text-primary animate-spin" />
+            <p className="text-sm text-muted-foreground">AI is generating suggestions...</p>
           </div>
-        </div>
-      </Card>
+        </Card>
+      ) : currentSuggestion ? (
+        <Card 
+          className="p-3 mb-4 bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/30 cursor-pointer hover:border-primary/50 transition-all glow-hover"
+          onClick={() => onSelectSuggestion(currentSuggestion.text)}
+        >
+          <div className="flex items-start gap-2">
+            <Sparkles className="w-4 h-4 text-primary mt-1 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm">{currentSuggestion.text}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Click to use · Generated with {selectedTone} tone
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {/* Quick Replies */}
       <div>
