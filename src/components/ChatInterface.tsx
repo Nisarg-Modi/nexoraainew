@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Sparkles, Languages, Smile, Volume2 } from "lucide-react";
+import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -200,51 +200,29 @@ const ChatInterface = ({
     }
   };
 
-  const handleVoiceRecording = async (audioData: string) => {
-    if (!conversationId) return;
+  const handleVoiceRecording = async (transcription: string) => {
+    if (!conversationId || !transcription.trim()) return;
 
     try {
-      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
-        body: { audioData },
-      });
-
-      if (error) {
-        console.error('Transcription error:', error);
-        throw new Error('Transcription service unavailable');
-      }
-
-      const transcription = data?.transcription;
-      
-      if (!transcription) {
-        throw new Error('No transcription returned');
-      }
-
-      // Send message with audio and transcription
+      // Send message with transcription
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
       const { error: insertError } = await supabase.from('messages').insert({
         conversation_id: conversationId,
         sender_id: userData.user.id,
-        content: transcription,
+        content: transcription.trim(),
         message_type: 'audio',
-        audio_data: audioData,
-        transcription: transcription,
+        transcription: transcription.trim(),
       });
 
       if (insertError) throw insertError;
 
-      toast({
-        title: "Voice message sent",
-        description: transcription.length > 50 
-          ? `"${transcription.substring(0, 50)}..."` 
-          : `"${transcription}"`,
-      });
     } catch (error) {
-      console.error('Error processing voice message:', error);
+      console.error('Error sending voice message:', error);
       toast({
-        title: "Voice message failed",
-        description: error instanceof Error ? error.message : "Failed to process voice message",
+        title: "Failed to send",
+        description: error instanceof Error ? error.message : "Failed to send voice message",
         variant: "destructive",
       });
     }
@@ -379,17 +357,6 @@ const MessageBubble = ({ message, contactName }: { message: Message; contactName
   const isAI = message.sender === "ai";
   const isAudio = message.messageType === 'audio';
 
-  const playAudio = () => {
-    if (!message.audioData) return;
-    
-    try {
-      const audio = new Audio(`data:audio/webm;base64,${message.audioData}`);
-      audio.play();
-    } catch (error) {
-      console.error('Error playing audio:', error);
-    }
-  };
-
   return (
     <div
       className={cn(
@@ -417,16 +384,9 @@ const MessageBubble = ({ message, contactName }: { message: Message; contactName
         )}
       >
         {isAudio && (
-          <div className="flex items-center gap-2 mb-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={playAudio}
-            >
-              <Volume2 className="w-4 h-4" />
-            </Button>
-            <span className="text-xs opacity-70">Voice Message</span>
+          <div className="flex items-center gap-2 mb-1">
+            <Mic className="w-3 h-3 opacity-70" />
+            <span className="text-xs opacity-70">Voice message</span>
           </div>
         )}
         <p className="text-sm">{message.text}</p>

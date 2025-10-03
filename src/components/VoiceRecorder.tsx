@@ -4,87 +4,120 @@ import { Mic, Square, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface VoiceRecorderProps {
-  onRecordingComplete: (audioData: string) => void;
+  onRecordingComplete: (transcription: string) => void;
   disabled?: boolean;
+}
+
+// Extend Window interface for webkit
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
 }
 
 const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplete, disabled }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef<string>('');
   const { toast } = useToast();
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm',
-      });
+      // Check for browser support
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      
+      if (!SpeechRecognition) {
+        toast({
+          title: "Not supported",
+          description: "Speech recognition is not supported in this browser. Please use Chrome or Edge.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      transcriptRef.current = '';
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        toast({
+          title: "Recording started",
+          description: "Speak your message",
+        });
+      };
+
+      recognition.onresult = (event: any) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          transcriptRef.current += finalTranscript;
         }
       };
 
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const reader = new FileReader();
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsRecording(false);
         
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          // Remove data URL prefix
-          const base64Data = base64.split(',')[1];
-          onRecordingComplete(base64Data);
-          setIsProcessing(false); // Reset processing state
-        };
-        
-        reader.onerror = () => {
-          setIsProcessing(false); // Reset on error
+        if (event.error !== 'aborted') {
           toast({
             title: "Error",
-            description: "Failed to process audio",
+            description: `Speech recognition error: ${event.error}`,
             variant: "destructive",
           });
-        };
-        
-        reader.readAsDataURL(blob);
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+        }
       };
 
-      mediaRecorder.start();
-      setIsRecording(true);
-      
-      toast({
-        title: "Recording started",
-        description: "Speak your message",
-      });
+      recognition.onend = () => {
+        setIsRecording(false);
+        
+        if (transcriptRef.current.trim()) {
+          onRecordingComplete(transcriptRef.current.trim());
+          toast({
+            title: "Message transcribed",
+            description: transcriptRef.current.trim().substring(0, 50) + (transcriptRef.current.length > 50 ? '...' : ''),
+          });
+        } else {
+          toast({
+            title: "No speech detected",
+            description: "Please try again",
+            variant: "destructive",
+          });
+        }
+        
+        transcriptRef.current = '';
+      };
+
+      recognition.start();
     } catch (error) {
       console.error('Error starting recording:', error);
+      setIsRecording(false);
       toast({
         title: "Error",
-        description: "Could not access microphone",
+        description: "Could not start recording",
         variant: "destructive",
       });
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      setIsProcessing(true);
-      
-      toast({
-        title: "Processing",
-        description: "Transcribing your message...",
-      });
+    if (recognitionRef.current && isRecording) {
+      recognitionRef.current.stop();
     }
   };
 
@@ -94,11 +127,9 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onRecordingComplete, disa
       variant={isRecording ? "destructive" : "outline"}
       size="icon"
       onClick={isRecording ? stopRecording : startRecording}
-      disabled={disabled || isProcessing}
+      disabled={disabled}
     >
-      {isProcessing ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : isRecording ? (
+      {isRecording ? (
         <Square className="h-4 w-4" />
       ) : (
         <Mic className="h-4 w-4" />
