@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Sparkles, Languages, Smile } from "lucide-react";
+import { ArrowLeft, Send, Sparkles, Languages, Smile, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import AISuggestions from "./AISuggestions";
 import ChatSummarizer from "./ChatSummarizer";
+import VoiceRecorder from "./VoiceRecorder";
 
 interface Message {
   id: string;
@@ -14,6 +15,9 @@ interface Message {
   sender: "user" | "ai" | "contact";
   timestamp: Date;
   aiGenerated?: boolean;
+  messageType?: 'text' | 'audio' | 'image';
+  audioData?: string;
+  transcription?: string;
 }
 
 const ChatInterface = ({ 
@@ -97,10 +101,13 @@ const ChatInterface = ({
     } else {
       const formattedMessages: Message[] = data.map((msg) => ({
         id: msg.id,
-        text: msg.content,
+        text: msg.content || msg.transcription || '',
         sender: msg.sender_id === currentUserId ? 'user' : 'contact',
         timestamp: new Date(msg.created_at),
         aiGenerated: msg.ai_generated,
+        messageType: (msg.message_type || 'text') as 'text' | 'audio' | 'image',
+        audioData: msg.audio_data || undefined,
+        transcription: msg.transcription || undefined,
       }));
       setMessages(formattedMessages);
     }
@@ -132,10 +139,13 @@ const ChatInterface = ({
               ...prev,
               {
                 id: newMsg.id,
-                text: newMsg.content,
+                text: newMsg.content || newMsg.transcription || '',
                 sender: newMsg.sender_id === currentUserId ? 'user' : 'contact',
                 timestamp: new Date(newMsg.created_at),
                 aiGenerated: newMsg.ai_generated,
+                messageType: (newMsg.message_type || 'text') as 'text' | 'audio' | 'image',
+                audioData: newMsg.audio_data || undefined,
+                transcription: newMsg.transcription || undefined,
               },
             ];
           });
@@ -170,6 +180,7 @@ const ChatInterface = ({
       conversation_id: conversationId,
       sender_id: userData.user.id,
       content: messageContent,
+      message_type: 'text',
     });
 
     if (error) {
@@ -186,6 +197,57 @@ const ChatInterface = ({
         variant: "destructive",
       });
       setInputText(messageContent);
+    }
+  };
+
+  const handleVoiceRecording = async (audioData: string) => {
+    if (!conversationId) return;
+
+    try {
+      toast({
+        title: "Transcribing...",
+        description: "Converting your voice to text",
+      });
+
+      // Call transcription edge function
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audioData },
+      });
+
+      if (error) throw error;
+
+      const transcription = data?.transcription;
+      
+      if (!transcription) {
+        throw new Error('No transcription returned');
+      }
+
+      // Send message with audio and transcription
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { error: insertError } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: userData.user.id,
+        content: transcription,
+        message_type: 'audio',
+        audio_data: audioData,
+        transcription: transcription,
+      });
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Voice message sent",
+        description: `Transcribed: "${transcription.substring(0, 50)}${transcription.length > 50 ? '...' : ''}"`,
+      });
+    } catch (error) {
+      console.error('Error processing voice message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process voice message",
+        variant: "destructive",
+      });
     }
   };
 
@@ -291,6 +353,10 @@ const ChatInterface = ({
               </Button>
             </div>
           </div>
+          <VoiceRecorder 
+            onRecordingComplete={handleVoiceRecording}
+            disabled={!conversationId}
+          />
           <Button
             onClick={handleSend}
             disabled={!inputText.trim()}
@@ -312,6 +378,18 @@ const ChatInterface = ({
 const MessageBubble = ({ message, contactName }: { message: Message; contactName: string }) => {
   const isUser = message.sender === "user";
   const isAI = message.sender === "ai";
+  const isAudio = message.messageType === 'audio';
+
+  const playAudio = () => {
+    if (!message.audioData) return;
+    
+    try {
+      const audio = new Audio(`data:audio/webm;base64,${message.audioData}`);
+      audio.play();
+    } catch (error) {
+      console.error('Error playing audio:', error);
+    }
+  };
 
   return (
     <div
@@ -339,6 +417,19 @@ const MessageBubble = ({ message, contactName }: { message: Message; contactName
             : "bg-card border border-border"
         )}
       >
+        {isAudio && (
+          <div className="flex items-center gap-2 mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={playAudio}
+            >
+              <Volume2 className="w-4 h-4" />
+            </Button>
+            <span className="text-xs opacity-70">Voice Message</span>
+          </div>
+        )}
         <p className="text-sm">{message.text}</p>
         <p className="text-xs opacity-70 mt-1">
           {message.timestamp.toLocaleTimeString([], {
