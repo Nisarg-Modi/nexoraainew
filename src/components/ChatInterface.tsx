@@ -29,20 +29,28 @@ const ChatInterface = ({
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
+    const initUser = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        setCurrentUserId(userData.user.id);
+      }
+    };
+    initUser();
     initializeConversation();
   }, [contactUserId]);
 
   useEffect(() => {
-    if (conversationId) {
+    if (conversationId && currentUserId) {
       fetchMessages();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
-  }, [conversationId]);
+  }, [conversationId, currentUserId]);
 
   const initializeConversation = async () => {
     try {
@@ -65,10 +73,7 @@ const ChatInterface = ({
   };
 
   const fetchMessages = async () => {
-    if (!conversationId) return;
-
-    const { data: userData } = await supabase.auth.getUser();
-    const currentUserId = userData.user?.id;
+    if (!conversationId || !currentUserId) return;
 
     const { data, error } = await supabase
       .from('messages')
@@ -78,6 +83,11 @@ const ChatInterface = ({
 
     if (error) {
       console.error('Error fetching messages:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load messages",
+        variant: "destructive",
+      });
     } else {
       const formattedMessages: Message[] = data.map((msg) => ({
         id: msg.id,
@@ -91,10 +101,12 @@ const ChatInterface = ({
   };
 
   const subscribeToMessages = () => {
-    if (!conversationId) return () => {};
+    if (!conversationId || !currentUserId) return () => {};
+
+    console.log('Subscribing to messages for conversation:', conversationId);
 
     const channel = supabase
-      .channel(`messages:${conversationId}`)
+      .channel(`conversation-${conversationId}`)
       .on(
         'postgres_changes',
         {
@@ -104,6 +116,7 @@ const ChatInterface = ({
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
+          console.log('New message received:', payload);
           const newMsg = payload.new;
           
           setMessages((prev) => {
@@ -117,7 +130,7 @@ const ChatInterface = ({
               {
                 id: newMsg.id,
                 text: newMsg.content,
-                sender: newMsg.sender_id === contactUserId ? 'contact' : 'user',
+                sender: newMsg.sender_id === currentUserId ? 'user' : 'contact',
                 timestamp: new Date(newMsg.created_at),
                 aiGenerated: newMsg.ai_generated,
               },
@@ -125,9 +138,12 @@ const ChatInterface = ({
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
 
     return () => {
+      console.log('Unsubscribing from messages');
       supabase.removeChannel(channel);
     };
   };
