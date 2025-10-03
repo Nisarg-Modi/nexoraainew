@@ -121,14 +121,11 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
     setLoading(true);
 
     try {
-      // Find user by phone number
+      // Find user by phone number using secure function
       const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('user_id, display_name')
-        .eq('phone_number', phoneNumber.trim())
-        .maybeSingle();
+        .rpc('find_user_by_phone', { input_phone: phoneNumber.trim() });
 
-      if (profileError || !profileData) {
+      if (profileError || !profileData || profileData.length === 0) {
         toast({
           title: "User not found",
           description: "No Nexora user found with this phone number",
@@ -137,11 +134,13 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
         return;
       }
 
-      // Check if trying to add themselves
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      const userData = profileData[0];
 
-      if (profileData.user_id === userData.user.id) {
+      // Check if trying to add themselves
+      const { data: currentUser } = await supabase.auth.getUser();
+      if (!currentUser.user) return;
+
+      if (userData.user_id === currentUser.user.id) {
         toast({
           title: "Cannot add yourself",
           description: "You cannot add yourself as a contact",
@@ -153,9 +152,9 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
       const { error: contactError } = await supabase
         .from('contacts')
         .insert({
-          user_id: userData.user.id,
-          contact_user_id: profileData.user_id,
-          contact_name: contactName.trim() || profileData.display_name,
+          user_id: currentUser.user.id,
+          contact_user_id: userData.user_id,
+          contact_name: contactName.trim() || userData.display_name,
         });
 
       if (contactError) {
@@ -182,7 +181,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
       } else {
         toast({
           title: "Contact added!",
-          description: `${contactName || profileData.display_name} has been added to your contacts`,
+          description: `${contactName || userData.display_name} has been added to your contacts`,
         });
         setPhoneNumber("");
         setContactName("");

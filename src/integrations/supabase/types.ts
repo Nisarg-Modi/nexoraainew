@@ -237,6 +237,13 @@ export type Database = {
         Args: { conv_id: string; user_uuid: string }
         Returns: boolean
       }
+      find_user_by_phone: {
+        Args: { input_phone: string }
+        Returns: {
+          display_name: string
+          user_id: string
+        }[]
+      }
       get_email_by_username: {
         Args: { input_username: string }
         Returns: string
