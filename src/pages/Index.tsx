@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Shield, Sparkles, Globe, Zap } from "lucide-react";
+import { Shield, Sparkles, Globe, Zap, LogOut } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
   const [showChat, setShowChat] = useState(false);
+  const { signOut, user } = useAuth();
 
   if (showChat) {
     return <ChatInterface onBack={() => setShowChat(false)} />;
@@ -12,6 +14,21 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background overflow-hidden relative">
+      {/* Header with user info */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-4">
+        <span className="text-sm text-muted-foreground">
+          {user?.email}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={signOut}
+          className="hover:bg-primary/10"
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          Sign Out
+        </Button>
+      </div>
       {/* Animated background glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl aurora-bg" />
