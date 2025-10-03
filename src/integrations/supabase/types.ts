@@ -183,6 +183,30 @@ export type Database = {
         }
         Relationships: []
       }
+      security_audit_log: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -214,6 +238,21 @@ export type Database = {
       }
       get_or_create_conversation: {
         Args: { other_user_id: string }
+        Returns: string
+      }
+      get_safe_profile: {
+        Args: { profile_user_id: string }
+        Returns: {
+          avatar_url: string
+          bio: string
+          display_name: string
+          status: string
+          user_id: string
+          username: string
+        }[]
+      }
+      hash_identifier: {
+        Args: { identifier_text: string }
         Returns: string
       }
       is_conversation_participant: {
