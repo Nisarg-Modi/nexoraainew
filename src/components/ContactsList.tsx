@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -139,9 +139,18 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
         return;
       }
 
-      // Add contact
+      // Check if trying to add themselves
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
+
+      if (profileData.user_id === userData.user.id) {
+        toast({
+          title: "Cannot add yourself",
+          description: "You cannot add yourself as a contact",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const { error: contactError } = await supabase
         .from('contacts')
@@ -236,6 +245,9 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add New Contact</DialogTitle>
+                <DialogDescription>
+                  Enter a phone number to find and add a Mercury user to your contacts
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-4">
                 <div className="space-y-2">
