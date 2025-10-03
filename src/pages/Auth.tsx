@@ -9,7 +9,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
-const authSchema = z.object({
+const loginSchema = z.object({
+  username: z.string().trim().min(3, "Username must be at least 3 characters").max(30, "Username too long"),
+  password: z.string().min(8, "Password must be at least 8 characters").max(100, "Password too long"),
+});
+
+const signupSchema = z.object({
+  username: z.string().trim().min(3, "Username must be at least 3 characters").max(30, "Username too long").regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
   email: z.string().email("Invalid email address").max(255, "Email too long"),
   password: z.string().min(8, "Password must be at least 8 characters").max(100, "Password too long"),
   displayName: z.string().trim().min(2, "Display name must be at least 2 characters").max(50, "Display name too long").optional(),
@@ -18,6 +24,7 @@ const authSchema = z.object({
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -41,15 +48,26 @@ const Auth = () => {
 
     try {
       // Validate input
-      const validationData = isLogin 
-        ? { email, password }
-        : { email, password, displayName, phoneNumber: phoneNumber || undefined };
-      
-      authSchema.parse(validationData);
-
       if (isLogin) {
+        loginSchema.parse({ username, password });
+
+        // Get email from username
+        const { data: emailData, error: emailError } = await supabase.rpc(
+          'get_email_by_username',
+          { input_username: username.trim() }
+        );
+
+        if (emailError || !emailData) {
+          toast({
+            title: "Login failed",
+            description: "Username not found. Please check your username.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: emailData,
           password,
         });
 
@@ -57,7 +75,7 @@ const Auth = () => {
           if (error.message.includes("Invalid login credentials")) {
             toast({
               title: "Login failed",
-              description: "Invalid email or password. Please try again.",
+              description: "Invalid username or password. Please try again.",
               variant: "destructive",
             });
           } else {
@@ -75,6 +93,29 @@ const Auth = () => {
           navigate("/");
         }
       } else {
+        signupSchema.parse({ 
+          username, 
+          email, 
+          password, 
+          displayName, 
+          phoneNumber: phoneNumber || undefined 
+        });
+
+        // Check if username already exists
+        const { data: existingUsername } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('username', username.trim())
+          .single();
+
+        if (existingUsername) {
+          toast({
+            title: "Username taken",
+            description: "This username is already in use. Please choose another.",
+            variant: "destructive",
+          });
+          return;
+        }
         const redirectUrl = `${window.location.origin}/`;
         
         const { data: authData, error } = await supabase.auth.signUp({
@@ -83,7 +124,8 @@ const Auth = () => {
           options: {
             emailRedirectTo: redirectUrl,
             data: {
-              display_name: displayName.trim() || email.split("@")[0],
+              display_name: displayName.trim() || username.trim(),
+              username: username.trim(),
             },
           },
         });
@@ -158,10 +200,43 @@ const Auth = () => {
 
         {/* Auth Form */}
         <form onSubmit={handleAuth} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              type="text"
+              placeholder={isLogin ? "Enter your username" : "Choose a username"}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              className="bg-muted border-border"
+              maxLength={30}
+            />
+            {!isLogin && (
+              <p className="text-xs text-muted-foreground">
+                Only letters, numbers, and underscores allowed
+              </p>
+            )}
+          </div>
+
           {!isLogin && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="displayName">Display Name</Label>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="bg-muted border-border"
+                  maxLength={255}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Display Name (optional)</Label>
                 <Input
                   id="displayName"
                   type="text"
@@ -172,6 +247,7 @@ const Auth = () => {
                   maxLength={50}
                 />
               </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="phoneNumber">Phone Number (optional)</Label>
                 <Input
@@ -189,20 +265,6 @@ const Auth = () => {
               </div>
             </>
           )}
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="bg-muted border-border"
-              maxLength={255}
-            />
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
@@ -239,6 +301,7 @@ const Auth = () => {
             type="button"
             onClick={() => {
               setIsLogin(!isLogin);
+              setEmail("");
               setDisplayName("");
               setPhoneNumber("");
             }}

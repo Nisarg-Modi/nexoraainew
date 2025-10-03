@@ -134,6 +134,7 @@ export type Database = {
           status: string | null
           updated_at: string
           user_id: string
+          username: string
         }
         Insert: {
           avatar_url?: string | null
@@ -145,6 +146,7 @@ export type Database = {
           status?: string | null
           updated_at?: string
           user_id: string
+          username: string
         }
         Update: {
           avatar_url?: string | null
@@ -156,6 +158,7 @@ export type Database = {
           status?: string | null
           updated_at?: string
           user_id?: string
+          username?: string
         }
         Relationships: []
       }
@@ -164,6 +167,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_email_by_username: {
+        Args: { input_username: string }
+        Returns: string
+      }
       get_or_create_conversation: {
         Args: { other_user_id: string }
         Returns: string
