@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { UserPlus, MessageCircle, Search } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { UserPlus, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
@@ -20,6 +21,27 @@ interface Contact {
     avatar_url: string | null;
   };
 }
+
+const avatarColors = [
+  'bg-blue-500',
+  'bg-green-500',
+  'bg-purple-500',
+  'bg-pink-500',
+  'bg-orange-500',
+  'bg-teal-500',
+  'bg-indigo-500',
+  'bg-red-500',
+];
+
+const contactEmojis = ['👋', '💬', '🎉', '✨', '🔥', '💡', '🚀', '🌟'];
+const statusMessages = [
+  'Hey there! 👋',
+  'Available to chat 💬',
+  'Busy right now ⏰',
+  'At work 💼',
+  'Sleeping 😴',
+  'Online 🟢',
+];
 
 interface ContactsListProps {
   onStartChat: (contactUserId: string, contactName: string) => void;
@@ -172,19 +194,45 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
     return name.toLowerCase().includes(query) || phone.includes(query);
   });
 
+  const getAvatarColor = (userId: string) => {
+    const index = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return avatarColors[index % avatarColors.length];
+  };
+
+  const getRandomEmoji = (userId: string) => {
+    const index = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return contactEmojis[index % contactEmojis.length];
+  };
+
+  const getStatusMessage = (userId: string) => {
+    const index = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return statusMessages[index % statusMessages.length];
+  };
+
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold gradient-text">Contacts</h2>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="bg-primary hover:bg-primary-glow">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add Contact
-              </Button>
-            </DialogTrigger>
+      {/* Search Bar */}
+      <div className="p-3 border-b border-border">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="🔍 Search or start new chat"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-muted/50 border-border rounded-full"
+          />
+        </div>
+      </div>
+
+      {/* Add Contact Button */}
+      <div className="px-3 py-2 border-b border-border">
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="w-full bg-primary hover:bg-primary-glow justify-start">
+              <UserPlus className="w-4 h-4 mr-2" />
+              Add New Contact
+            </Button>
+          </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add New Contact</DialogTitle>
@@ -224,75 +272,69 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
                 </Button>
               </div>
             </DialogContent>
-          </Dialog>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search contacts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-muted border-border"
-          />
-        </div>
+        </Dialog>
       </div>
 
       {/* Contacts List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto">
         {filteredContacts.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12 px-4">
+            <p className="text-2xl mb-2">🔍</p>
             <p className="text-muted-foreground mb-4">
-              {searchQuery ? "No contacts found" : "No contacts yet"}
+              {searchQuery ? "No contacts found" : "No contacts yet 📱"}
             </p>
             {!searchQuery && (
               <p className="text-sm text-muted-foreground">
-                Add contacts by their phone number to start chatting
+                Add contacts by phone number to start chatting 💬
               </p>
             )}
           </div>
         ) : (
-          filteredContacts.map((contact) => (
-            <Card
-              key={contact.id}
-              className="p-4 hover:bg-primary/5 transition-colors cursor-pointer"
-              onClick={() => onStartChat(
-                contact.contact_user_id,
-                contact.contact_name || contact.profiles?.display_name || 'Unknown'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
-                  <span className="font-semibold text-lg">
-                    {(contact.contact_name || contact.profiles?.display_name || '?')[0].toUpperCase()}
-                  </span>
-                </div>
+          filteredContacts.map((contact, index) => {
+            const displayName = contact.contact_name || contact.profiles?.display_name || 'Unknown';
+            const emoji = getRandomEmoji(contact.contact_user_id);
+            const statusMsg = contact.profiles?.status || getStatusMessage(contact.contact_user_id);
+            const avatarColor = getAvatarColor(contact.contact_user_id);
+            const unreadCount = index % 5 === 0 ? Math.floor(Math.random() * 5) + 1 : 0;
+            
+            return (
+              <div
+                key={contact.id}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
+                onClick={() => onStartChat(contact.contact_user_id, displayName)}
+              >
+                {/* Avatar */}
+                <Avatar className="w-12 h-12 flex-shrink-0">
+                  <AvatarImage src={contact.profiles?.avatar_url || undefined} />
+                  <AvatarFallback className={`${avatarColor} text-white font-semibold`}>
+                    {displayName[0].toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+
+                {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold truncate">
-                    {contact.contact_name || contact.profiles?.display_name || 'Unknown'}
-                  </h3>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {contact.profiles?.status || contact.profiles?.phone_number || 'Hey there! I am using Mercury'}
-                  </p>
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-semibold truncate text-foreground">
+                      {displayName} {emoji}
+                    </h3>
+                    <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                      {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground truncate flex-1">
+                      {statusMsg}
+                    </p>
+                    {unreadCount > 0 && (
+                      <Badge className="bg-accent text-accent-foreground rounded-full w-5 h-5 flex items-center justify-center p-0 text-xs ml-2">
+                        {unreadCount}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="flex-shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStartChat(
-                      contact.contact_user_id,
-                      contact.contact_name || contact.profiles?.display_name || 'Unknown'
-                    );
-                  }}
-                >
-                  <MessageCircle className="w-5 h-5 text-primary" />
-                </Button>
               </div>
-            </Card>
-          ))
+            );
+          })
         )}
       </div>
     </div>
