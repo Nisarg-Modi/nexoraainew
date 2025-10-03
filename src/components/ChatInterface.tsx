@@ -41,7 +41,12 @@ const ChatInterface = ({
       }
     };
     initUser();
-    initializeConversation();
+  }, []);
+
+  useEffect(() => {
+    if (contactUserId) {
+      initializeConversation();
+    }
   }, [contactUserId]);
 
   useEffect(() => {
@@ -103,8 +108,6 @@ const ChatInterface = ({
   const subscribeToMessages = () => {
     if (!conversationId || !currentUserId) return () => {};
 
-    console.log('Subscribing to messages for conversation:', conversationId);
-
     const channel = supabase
       .channel(`conversation-${conversationId}`)
       .on(
@@ -116,7 +119,6 @@ const ChatInterface = ({
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          console.log('New message received:', payload);
           const newMsg = payload.new;
           
           setMessages((prev) => {
@@ -138,12 +140,9 @@ const ChatInterface = ({
           });
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
-      console.log('Unsubscribing from messages');
       supabase.removeChannel(channel);
     };
   };
@@ -159,13 +158,17 @@ const ChatInterface = ({
   const handleSend = async () => {
     if (!inputText.trim() || !conversationId) return;
 
+    const messageContent = inputText.trim();
+    setInputText("");
+    setShowAISuggestions(false);
+
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
 
     const { error } = await supabase.from('messages').insert({
       conversation_id: conversationId,
       sender_id: userData.user.id,
-      content: inputText.trim(),
+      content: messageContent,
     });
 
     if (error) {
@@ -175,9 +178,7 @@ const ChatInterface = ({
         description: "Failed to send message",
         variant: "destructive",
       });
-    } else {
-      setInputText("");
-      setShowAISuggestions(false);
+      setInputText(messageContent);
     }
   };
 
