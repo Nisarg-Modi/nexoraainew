@@ -9,6 +9,7 @@ import SubscriptionManagement from "@/components/SubscriptionManagement";
 import { useAuth } from "@/hooks/useAuth";
 import { useSemanticSearch } from "@/hooks/useSemanticSearch";
 import nexoraLogo from "@/assets/nexora-logo.png";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
@@ -51,15 +52,18 @@ const Index = () => {
           <div className="flex items-center gap-2">
             <img src={nexoraLogo} alt="Nexora" className="h-8" />
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={signOut}
-            className="hover:bg-primary/10"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeSwitcher />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={signOut}
+              className="hover:bg-primary/10"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
         
         {/* Main Content with Tabs */}
