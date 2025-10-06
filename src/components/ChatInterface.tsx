@@ -14,6 +14,8 @@ interface Message {
   id: string;
   text: string;
   sender: "user" | "ai" | "contact";
+  senderId?: string;
+  senderName?: string;
   timestamp: Date;
   aiGenerated?: boolean;
   messageType?: 'text' | 'audio' | 'image';
@@ -23,11 +25,15 @@ interface Message {
 
 const ChatInterface = ({ 
   contactUserId, 
-  contactName, 
+  contactName,
+  isGroup = false,
+  conversationId: providedConversationId,
   onBack 
 }: { 
   contactUserId: string;
   contactName: string;
+  isGroup?: boolean;
+  conversationId?: string;
   onBack: () => void;
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,10 +56,13 @@ const ChatInterface = ({
   }, []);
 
   useEffect(() => {
-    if (contactUserId) {
+    if (isGroup && providedConversationId) {
+      setConversationId(providedConversationId);
+      setLoading(false);
+    } else if (contactUserId) {
       initializeConversation();
     }
-  }, [contactUserId]);
+  }, [contactUserId, isGroup, providedConversationId]);
 
   useEffect(() => {
     if (conversationId && currentUserId) {
@@ -99,18 +108,33 @@ const ChatInterface = ({
         description: "Failed to load messages",
         variant: "destructive",
       });
-    } else {
-      const formattedMessages: Message[] = data.map((msg) => ({
-        id: msg.id,
-        text: msg.content || msg.transcription || '',
-        sender: msg.sender_id === currentUserId ? 'user' : 'contact',
-        timestamp: new Date(msg.created_at),
-        aiGenerated: msg.ai_generated,
-        messageType: (msg.message_type || 'text') as 'text' | 'audio' | 'image',
-        audioData: msg.audio_data || undefined,
-        transcription: msg.transcription || undefined,
-      }));
-      setMessages(formattedMessages);
+    } else if (data) {
+      // Fetch sender profiles for group chats
+      const messagesWithProfiles = await Promise.all(
+        data.map(async (msg) => {
+          let senderName = 'Unknown';
+          
+          if (isGroup && msg.sender_id !== currentUserId) {
+            const { data: profile } = await supabase
+              .rpc('get_safe_profile', { profile_user_id: msg.sender_id });
+            senderName = profile?.[0]?.display_name || 'Unknown';
+          }
+
+          return {
+            id: msg.id,
+            text: msg.content || msg.transcription || '',
+            sender: msg.sender_id === currentUserId ? 'user' : 'contact',
+            senderId: msg.sender_id,
+            senderName,
+            timestamp: new Date(msg.created_at),
+            aiGenerated: msg.ai_generated,
+            messageType: (msg.message_type || 'text') as 'text' | 'audio' | 'image',
+            audioData: msg.audio_data || undefined,
+            transcription: msg.transcription || undefined,
+          } as Message;
+        })
+      );
+      setMessages(messagesWithProfiles);
     }
   };
 
@@ -130,25 +154,37 @@ const ChatInterface = ({
         (payload) => {
           const newMsg = payload.new;
           
-          setMessages((prev) => {
-            // Avoid duplicate messages
-            if (prev.some(m => m.id === newMsg.id)) {
-              return prev;
-            }
+          // Fetch sender profile for group chats
+          const fetchSenderProfile = async () => {
+            const { data: profile } = await supabase
+              .rpc('get_safe_profile', { profile_user_id: newMsg.sender_id });
             
-            return [
-              ...prev,
-              {
-                id: newMsg.id,
-                text: newMsg.content || newMsg.transcription || '',
-                sender: newMsg.sender_id === currentUserId ? 'user' : 'contact',
-                timestamp: new Date(newMsg.created_at),
-                aiGenerated: newMsg.ai_generated,
-                messageType: (newMsg.message_type || 'text') as 'text' | 'audio' | 'image',
-                audioData: newMsg.audio_data || undefined,
-                transcription: newMsg.transcription || undefined,
-              },
-            ];
+            return profile?.[0]?.display_name || 'Unknown';
+          };
+
+          fetchSenderProfile().then((senderName) => {
+            setMessages((prev) => {
+              // Avoid duplicate messages
+              if (prev.some(m => m.id === newMsg.id)) {
+                return prev;
+              }
+              
+              return [
+                ...prev,
+                {
+                  id: newMsg.id,
+                  text: newMsg.content || newMsg.transcription || '',
+                  sender: newMsg.sender_id === currentUserId ? 'user' : 'contact',
+                  senderId: newMsg.sender_id,
+                  senderName,
+                  timestamp: new Date(newMsg.created_at),
+                  aiGenerated: newMsg.ai_generated,
+                  messageType: (newMsg.message_type || 'text') as 'text' | 'audio' | 'image',
+                  audioData: newMsg.audio_data || undefined,
+                  transcription: newMsg.transcription || undefined,
+                },
+              ];
+            });
           });
         }
       )
@@ -254,7 +290,7 @@ const ChatInterface = ({
             <h2 className="font-semibold">{contactName}</h2>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <span className="w-2 h-2 bg-accent rounded-full" />
-              Online · Encrypted Connection
+              {isGroup ? 'Group Chat' : 'Online'} · Encrypted Connection
             </p>
           </div>
         </div>
@@ -276,7 +312,12 @@ const ChatInterface = ({
           </div>
         ) : (
           messages.map((message) => (
-            <MessageBubble key={message.id} message={message} contactName={contactName} />
+            <MessageBubble 
+              key={message.id} 
+              message={message} 
+              contactName={contactName}
+              isGroup={isGroup}
+            />
           ))
         )}
         <div ref={messagesEndRef} />
@@ -353,7 +394,7 @@ const ChatInterface = ({
   );
 };
 
-const MessageBubble = ({ message, contactName }: { message: Message; contactName: string }) => {
+const MessageBubble = ({ message, contactName, isGroup }: { message: Message; contactName: string; isGroup?: boolean }) => {
   const isUser = message.sender === "user";
   const isAI = message.sender === "ai";
   const isAudio = message.messageType === 'audio';
@@ -369,12 +410,17 @@ const MessageBubble = ({ message, contactName }: { message: Message; contactName
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center flex-shrink-0">
           {isAI ? (
             <Sparkles className="w-4 h-4" />
+          ) : isGroup ? (
+            <span className="text-xs font-semibold">{message.senderName?.[0]?.toUpperCase()}</span>
           ) : (
             <span className="text-xs font-semibold">{contactName[0].toUpperCase()}</span>
           )}
         </div>
       )}
       <div className="flex flex-col gap-2 max-w-[70%]">
+        {isGroup && !isUser && (
+          <p className="text-xs text-muted-foreground px-1">{message.senderName}</p>
+        )}
         <div
           className={cn(
             "rounded-2xl px-4 py-2",

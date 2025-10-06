@@ -5,10 +5,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UserPlus, Search, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import CreateGroupDialog from "./CreateGroupDialog";
 
 interface Contact {
   id: string;
@@ -19,6 +21,13 @@ interface Contact {
     status: string | null;
     avatar_url: string | null;
   };
+}
+
+interface GroupConversation {
+  id: string;
+  group_name: string;
+  group_avatar_url: string | null;
+  participant_count: number;
 }
 
 const avatarColors = [
@@ -44,12 +53,14 @@ const statusMessages = [
 
 interface ContactsListProps {
   onStartChat: (contactUserId: string, contactName: string) => void;
+  onStartGroupChat: (conversationId: string, groupName: string) => void;
 }
 
 const usernameSchema = z.string().trim().min(3, "Username must be at least 3 characters").max(30, "Username too long").regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores");
 
-const ContactsList = ({ onStartChat }: ContactsListProps) => {
+const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [groups, setGroups] = useState<GroupConversation[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [username, setUsername] = useState("");
   const [contactName, setContactName] = useState("");
@@ -59,6 +70,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
 
   useEffect(() => {
     fetchContacts();
+    fetchGroups();
   }, []);
 
   const fetchContacts = async () => {
@@ -199,10 +211,67 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
     }
   };
 
+  const fetchGroups = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data, error } = await supabase
+        .from('conversation_participants')
+        .select(`
+          conversation_id,
+          conversations!inner (
+            id,
+            group_name,
+            group_avatar_url,
+            is_group
+          )
+        `)
+        .eq('user_id', userData.user.id);
+
+      if (error) {
+        console.error('Error fetching groups:', error);
+        return;
+      }
+
+      if (data) {
+        // Filter and format group conversations
+        const groupConversations = await Promise.all(
+          data
+            .filter(item => item.conversations?.is_group)
+            .map(async (item) => {
+              const conv = item.conversations;
+              
+              // Count participants
+              const { count } = await supabase
+                .from('conversation_participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('conversation_id', conv.id);
+
+              return {
+                id: conv.id,
+                group_name: conv.group_name || 'Unnamed Group',
+                group_avatar_url: conv.group_avatar_url,
+                participant_count: count || 0,
+              };
+            })
+        );
+        setGroups(groupConversations);
+      }
+    } catch (error) {
+      console.error('Error in fetchGroups:', error);
+    }
+  };
+
   const filteredContacts = contacts.filter(contact => {
     const name = contact.contact_name || contact.profiles?.display_name || '';
     const query = searchQuery.toLowerCase();
     return name.toLowerCase().includes(query);
+  });
+
+  const filteredGroups = groups.filter(group => {
+    const query = searchQuery.toLowerCase();
+    return group.group_name.toLowerCase().includes(query);
   });
 
   const getAvatarColor = (userId: string) => {
@@ -235,8 +304,8 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
         </div>
       </div>
 
-      {/* Add Contact Button */}
-      <div className="px-3 py-2 border-b border-border">
+      {/* Add Contact and Create Group Buttons */}
+      <div className="px-3 py-2 border-b border-border space-y-2">
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="w-full bg-primary hover:bg-primary-glow justify-start">
@@ -287,10 +356,23 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
               </div>
             </DialogContent>
         </Dialog>
+        <CreateGroupDialog 
+          onGroupCreated={(conversationId, groupName) => {
+            fetchGroups();
+            onStartGroupChat(conversationId, groupName);
+          }} 
+        />
       </div>
 
-      {/* Contacts List */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Tabs for Contacts and Groups */}
+      <Tabs defaultValue="contacts" className="flex-1 flex flex-col">
+        <TabsList className="mx-3 grid w-auto grid-cols-2">
+          <TabsTrigger value="contacts">Contacts</TabsTrigger>
+          <TabsTrigger value="groups">Groups ({groups.length})</TabsTrigger>
+        </TabsList>
+
+        {/* Contacts Tab */}
+        <TabsContent value="contacts" className="flex-1 overflow-y-auto mt-0">
         {filteredContacts.length === 0 ? (
           <div className="text-center py-12 px-4">
             <p className="text-2xl mb-2">🔍</p>
@@ -350,7 +432,60 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
             );
           })
         )}
-      </div>
+        </TabsContent>
+
+        {/* Groups Tab */}
+        <TabsContent value="groups" className="flex-1 overflow-y-auto mt-0">
+          {filteredGroups.length === 0 ? (
+            <div className="text-center py-12 px-4">
+              <p className="text-2xl mb-2">👥</p>
+              <p className="text-muted-foreground mb-4">
+                {searchQuery ? "No groups found" : "No groups yet"}
+              </p>
+              {!searchQuery && (
+                <p className="text-sm text-muted-foreground">
+                  Create a group to chat with multiple contacts
+                </p>
+              )}
+            </div>
+          ) : (
+            filteredGroups.map((group) => {
+              return (
+                <div
+                  key={group.id}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
+                  onClick={() => onStartGroupChat(group.id, group.group_name)}
+                >
+                  {/* Avatar */}
+                  <Avatar className="w-12 h-12 flex-shrink-0">
+                    <AvatarImage src={group.group_avatar_url || undefined} />
+                    <AvatarFallback className="bg-primary text-white font-semibold">
+                      <Users className="w-6 h-6" />
+                    </AvatarFallback>
+                  </Avatar>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-semibold truncate text-foreground">
+                        {group.group_name}
+                      </h3>
+                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                        {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground truncate flex-1">
+                        {group.participant_count} members
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

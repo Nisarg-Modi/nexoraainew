@@ -42,18 +42,21 @@ export type Database = {
         Row: {
           conversation_id: string
           id: string
+          is_admin: boolean | null
           joined_at: string
           user_id: string
         }
         Insert: {
           conversation_id: string
           id?: string
+          is_admin?: boolean | null
           joined_at?: string
           user_id: string
         }
         Update: {
           conversation_id?: string
           id?: string
+          is_admin?: boolean | null
           joined_at?: string
           user_id?: string
         }
@@ -70,17 +73,29 @@ export type Database = {
       conversations: {
         Row: {
           created_at: string
+          created_by: string | null
+          group_avatar_url: string | null
+          group_name: string | null
           id: string
+          is_group: boolean | null
           updated_at: string
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
+          group_avatar_url?: string | null
+          group_name?: string | null
           id?: string
+          is_group?: boolean | null
           updated_at?: string
         }
         Update: {
           created_at?: string
+          created_by?: string | null
+          group_avatar_url?: string | null
+          group_name?: string | null
           id?: string
+          is_group?: boolean | null
           updated_at?: string
         }
         Relationships: []
@@ -332,6 +347,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_group_member: {
+        Args: { p_conversation_id: string; p_user_id: string }
+        Returns: boolean
+      }
       binary_quantize: {
         Args: { "": string } | { "": unknown }
         Returns: unknown
@@ -351,6 +370,10 @@ export type Database = {
       check_message_rate_limit: {
         Args: { conv_id: string; user_uuid: string }
         Returns: boolean
+      }
+      create_group_conversation: {
+        Args: { p_group_name: string; p_member_ids: string[] }
+        Returns: string
       }
       find_user_by_phone: {
         Args: { input_phone: string }

@@ -12,14 +12,19 @@ import nexoraLogo from "@/assets/nexora-logo.png";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
-  const [selectedContact, setSelectedContact] = useState<{ userId: string; name: string } | null>(null);
+  const [selectedContact, setSelectedContact] = useState<{ userId: string; name: string; isGroup?: boolean; conversationId?: string } | null>(null);
   const { signOut, user } = useAuth();
   
   // Initialize semantic search hook for real-time embedding generation
   useSemanticSearch();
 
   const handleStartChat = (contactUserId: string, contactName: string) => {
-    setSelectedContact({ userId: contactUserId, name: contactName });
+    setSelectedContact({ userId: contactUserId, name: contactName, isGroup: false });
+    setCurrentView('chat');
+  };
+
+  const handleStartGroupChat = (conversationId: string, groupName: string) => {
+    setSelectedContact({ userId: '', name: groupName, isGroup: true, conversationId });
     setCurrentView('chat');
   };
 
@@ -28,6 +33,8 @@ const Index = () => {
       <ChatInterface
         contactUserId={selectedContact.userId}
         contactName={selectedContact.name}
+        isGroup={selectedContact.isGroup}
+        conversationId={selectedContact.conversationId}
         onBack={() => {
           setCurrentView('contacts');
           setSelectedContact(null);
@@ -74,7 +81,10 @@ const Index = () => {
             </TabsList>
             
             <TabsContent value="contacts">
-              <ContactsList onStartChat={handleStartChat} />
+              <ContactsList 
+                onStartChat={handleStartChat}
+                onStartGroupChat={handleStartGroupChat}
+              />
             </TabsContent>
             
             <TabsContent value="search">
