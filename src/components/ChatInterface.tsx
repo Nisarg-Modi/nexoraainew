@@ -9,6 +9,8 @@ import AISuggestions from "./AISuggestions";
 import ChatSummarizer from "./ChatSummarizer";
 import VoiceRecorder from "./VoiceRecorder";
 import MessageTranslator from "./MessageTranslator";
+import EmojiPicker, { EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface Message {
   id: string;
@@ -42,6 +44,7 @@ const ChatInterface = ({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -270,6 +273,11 @@ const ChatInterface = ({
     setShowAISuggestions(false);
   };
 
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setInputText(prev => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -339,13 +347,33 @@ const ChatInterface = ({
       {/* Input */}
       <div className="bg-card border-t border-border p-4">
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hover:bg-primary/10 text-muted-foreground"
-          >
-            <Smile className="w-5 h-5" />
-          </Button>
+          <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-primary/10 text-muted-foreground transition-transform hover:scale-110"
+              >
+                <Smile className="w-5 h-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent 
+              side="top" 
+              align="start" 
+              className="w-auto p-0 border-0 shadow-xl"
+            >
+              <EmojiPicker
+                onEmojiClick={handleEmojiClick}
+                theme={Theme.AUTO}
+                lazyLoadEmojis={true}
+                searchPlaceHolder="Search emojis..."
+                height={400}
+                width={350}
+                emojiStyle={EmojiStyle.NATIVE}
+                previewConfig={{ showPreview: false }}
+              />
+            </PopoverContent>
+          </Popover>
           <div className="flex-1 relative">
             <Input
               value={inputText}
