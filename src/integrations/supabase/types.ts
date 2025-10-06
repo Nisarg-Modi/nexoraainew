@@ -480,6 +480,10 @@ export type Database = {
         Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: string
       }
+      phone_number_exists: {
+        Args: { input_phone: string }
+        Returns: boolean
+      }
       record_login_attempt: {
         Args: { identifier_text: string; was_successful: boolean }
         Returns: undefined
