@@ -144,6 +144,22 @@ const Auth = () => {
           displayName, 
           phoneNumber: phoneNumber || undefined 
         });
+        
+        // Check if username is available (case-insensitive)
+        const { data: isAvailable, error: checkError } = await supabase.rpc(
+          'is_username_available',
+          { check_username: username.trim() }
+        );
+
+        if (checkError || !isAvailable) {
+          toast({
+            title: "Username taken",
+            description: "This username is already in use. Please choose a different one.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
         const redirectUrl = `${window.location.origin}/`;
         
         // Generate email if not provided (required by Supabase Auth)
