@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.semantic-search]
 verify_jwt = false
+
+[functions.translate-message]
+verify_jwt = true
+
+[functions.detect-language]
+verify_jwt = false

@@ -148,6 +148,39 @@ export type Database = {
           },
         ]
       }
+      message_translations: {
+        Row: {
+          created_at: string | null
+          id: string
+          message_id: string
+          original_text: string
+          source_language: string
+          target_language: string
+          translated_text: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          message_id: string
+          original_text: string
+          source_language: string
+          target_language: string
+          translated_text: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          message_id?: string
+          original_text?: string
+          source_language?: string
+          target_language?: string
+          translated_text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           ai_generated: boolean | null
@@ -197,36 +230,42 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auto_translate: boolean | null
           avatar_url: string | null
           bio: string | null
           created_at: string
           display_name: string | null
           id: string
           phone_number: string | null
+          preferred_language: string | null
           status: string | null
           updated_at: string
           user_id: string
           username: string
         }
         Insert: {
+          auto_translate?: boolean | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
           phone_number?: string | null
+          preferred_language?: string | null
           status?: string | null
           updated_at?: string
           user_id: string
           username: string
         }
         Update: {
+          auto_translate?: boolean | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
           phone_number?: string | null
+          preferred_language?: string | null
           status?: string | null
           updated_at?: string
           user_id?: string

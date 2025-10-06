@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import AISuggestions from "./AISuggestions";
 import ChatSummarizer from "./ChatSummarizer";
 import VoiceRecorder from "./VoiceRecorder";
+import MessageTranslator from "./MessageTranslator";
 
 interface Message {
   id: string;
@@ -373,29 +374,32 @@ const MessageBubble = ({ message, contactName }: { message: Message; contactName
           )}
         </div>
       )}
-      <div
-        className={cn(
-          "max-w-[70%] rounded-2xl px-4 py-2",
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : isAI
-            ? "bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 glow-ai"
-            : "bg-card border border-border"
-        )}
-      >
-        {isAudio && (
-          <div className="flex items-center gap-2 mb-1">
-            <Mic className="w-3 h-3 opacity-70" />
-            <span className="text-xs opacity-70">Voice message</span>
-          </div>
-        )}
-        <p className="text-sm">{message.text}</p>
-        <p className="text-xs opacity-70 mt-1">
-          {message.timestamp.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </p>
+      <div className="flex flex-col gap-2 max-w-[70%]">
+        <div
+          className={cn(
+            "rounded-2xl px-4 py-2",
+            isUser
+              ? "bg-primary text-primary-foreground"
+              : isAI
+              ? "bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 glow-ai"
+              : "bg-card border border-border"
+          )}
+        >
+          {isAudio && (
+            <div className="flex items-center gap-2 mb-1">
+              <Mic className="w-3 h-3 opacity-70" />
+              <span className="text-xs opacity-70">Voice message</span>
+            </div>
+          )}
+          <p className="text-sm">{message.text}</p>
+          <p className="text-xs opacity-70 mt-1">
+            {message.timestamp.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </div>
+        <MessageTranslator messageId={message.id} messageText={message.text} />
       </div>
     </div>
   );
