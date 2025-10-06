@@ -46,12 +46,12 @@ interface ContactsListProps {
   onStartChat: (contactUserId: string, contactName: string) => void;
 }
 
-const phoneSchema = z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format");
+const usernameSchema = z.string().trim().min(3, "Username must be at least 3 characters").max(30, "Username too long").regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores");
 
 const ContactsList = ({ onStartChat }: ContactsListProps) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [username, setUsername] = useState("");
   const [contactName, setContactName] = useState("");
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -95,37 +95,39 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
   };
 
   const addContact = async () => {
-    if (!phoneNumber.trim()) {
+    if (!username.trim()) {
       toast({
         title: "Error",
-        description: "Please enter a phone number",
+        description: "Please enter a username",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      phoneSchema.parse(phoneNumber);
-    } catch {
-      toast({
-        title: "Invalid phone number",
-        description: "Please use international format (e.g., +1234567890)",
-        variant: "destructive",
-      });
+      usernameSchema.parse(username);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Invalid username",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+      }
       return;
     }
 
     setLoading(true);
 
     try {
-      // Find user by phone number using secure function
+      // Find user by username using secure function
       const { data: profileData, error: profileError } = await supabase
-        .rpc('find_user_by_phone', { input_phone: phoneNumber.trim() });
+        .rpc('find_user_by_username', { input_username: username.trim() });
 
       if (profileError || !profileData || profileData.length === 0) {
         toast({
           title: "User not found",
-          description: "No Nexora user found with this phone number",
+          description: "No Nexora user found with this username",
           variant: "destructive",
         });
         return;
@@ -180,7 +182,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
           title: "Contact added!",
           description: `${contactName || userData.display_name} has been added to your contacts`,
         });
-        setPhoneNumber("");
+        setUsername("");
         setContactName("");
         setDialogOpen(false);
         fetchContacts();
@@ -246,22 +248,22 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
               <DialogHeader>
                 <DialogTitle>Add New Contact</DialogTitle>
                 <DialogDescription>
-                  Enter a phone number to find and add a Nexora user to your contacts
+                  Enter a username to find and add a Nexora user to your contacts
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
+                  <Label htmlFor="username">Username</Label>
                   <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+1234567890"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    maxLength={15}
+                    id="username"
+                    type="text"
+                    placeholder="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    maxLength={30}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Enter the Nexora user's phone number
+                    Enter the Nexora user's username
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -297,7 +299,7 @@ const ContactsList = ({ onStartChat }: ContactsListProps) => {
             </p>
             {!searchQuery && (
               <p className="text-sm text-muted-foreground">
-                Add contacts by phone number to start chatting 💬
+                Add contacts by username to start chatting 💬
               </p>
             )}
           </div>
