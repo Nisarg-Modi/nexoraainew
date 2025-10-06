@@ -411,6 +411,30 @@ export type Database = {
         Args: { identifier_text: string; was_successful: boolean }
         Returns: undefined
       }
+      semantic_search: {
+        Args: {
+          conversation_filter?: string
+          end_date?: string
+          match_count?: number
+          match_threshold?: number
+          message_type_filter?: string
+          query_embedding: string
+          sender_filter?: string
+          start_date?: string
+          user_id: string
+        }
+        Returns: {
+          content: string
+          content_preview: string
+          conversation_id: string
+          created_at: string
+          id: string
+          message_id: string
+          message_type: string
+          sender_id: string
+          similarity: number
+        }[]
+      }
       sparsevec_out: {
         Args: { "": unknown }
         Returns: unknown

@@ -1,15 +1,22 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Shield, Sparkles, Globe, Zap, LogOut } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Shield, Sparkles, Globe, Zap, LogOut, MessageSquare, Search, Crown } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
 import ContactsList from "@/components/ContactsList";
+import SemanticSearch from "@/components/SemanticSearch";
+import SubscriptionManagement from "@/components/SubscriptionManagement";
 import { useAuth } from "@/hooks/useAuth";
+import { useSemanticSearch } from "@/hooks/useSemanticSearch";
 import nexoraLogo from "@/assets/nexora-logo.png";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
   const [selectedContact, setSelectedContact] = useState<{ userId: string; name: string } | null>(null);
   const { signOut, user } = useAuth();
+  
+  // Initialize semantic search hook for real-time embedding generation
+  useSemanticSearch();
 
   const handleStartChat = (contactUserId: string, contactName: string) => {
     setSelectedContact({ userId: contactUserId, name: contactName });
@@ -47,7 +54,44 @@ const Index = () => {
             Sign Out
           </Button>
         </div>
-        <ContactsList onStartChat={handleStartChat} />
+        
+        {/* Main Content with Tabs */}
+        <div className="container mx-auto px-4 py-6">
+          <Tabs defaultValue="contacts" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="contacts" className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Contacts
+              </TabsTrigger>
+              <TabsTrigger value="search" className="flex items-center gap-2">
+                <Search className="h-4 w-4" />
+                Semantic Search
+              </TabsTrigger>
+              <TabsTrigger value="subscription" className="flex items-center gap-2">
+                <Crown className="h-4 w-4" />
+                Subscription
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="contacts">
+              <ContactsList onStartChat={handleStartChat} />
+            </TabsContent>
+            
+            <TabsContent value="search">
+              <SemanticSearch 
+                onResultClick={(conversationId, messageId) => {
+                  // Navigate to the conversation
+                  console.log('Navigate to conversation:', conversationId, messageId);
+                  // You can implement navigation to specific message here
+                }}
+              />
+            </TabsContent>
+            
+            <TabsContent value="subscription">
+              <SubscriptionManagement />
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     );
   }
