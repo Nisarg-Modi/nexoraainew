@@ -477,6 +477,10 @@ export type Database = {
         Args: { other_user_id: string }
         Returns: string
       }
+      get_own_phone_number: {
+        Args: { user_uuid: string }
+        Returns: string
+      }
       get_safe_profile: {
         Args: { profile_user_id: string }
         Returns: {
@@ -484,6 +488,21 @@ export type Database = {
           bio: string
           display_name: string
           status: string
+          user_id: string
+          username: string
+        }[]
+      }
+      get_viewable_profile: {
+        Args: { profile_user_id: string; viewer_id: string }
+        Returns: {
+          auto_translate: boolean
+          avatar_url: string
+          bio: string
+          created_at: string
+          display_name: string
+          preferred_language: string
+          status: string
+          updated_at: string
           user_id: string
           username: string
         }[]
