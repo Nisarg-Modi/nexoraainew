@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      _security_documentation: {
+        Row: {
+          best_practice: string
+          created_at: string | null
+          description: string
+          feature: string
+        }
+        Insert: {
+          best_practice: string
+          created_at?: string | null
+          description: string
+          feature: string
+        }
+        Update: {
+          best_practice?: string
+          created_at?: string | null
+          description?: string
+          feature?: string
+        }
+        Relationships: []
+      }
       call_participants: {
         Row: {
           call_id: string
@@ -420,7 +441,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      profiles_safe: {
+        Row: {
+          auto_translate: boolean | null
+          avatar_url: string | null
+          bio: string | null
+          created_at: string | null
+          display_name: string | null
+          phone_number: string | null
+          preferred_language: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+          username: string | null
+        }
+        Insert: {
+          auto_translate?: boolean | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          phone_number?: never
+          preferred_language?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          username?: string | null
+        }
+        Update: {
+          auto_translate?: boolean | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          phone_number?: never
+          preferred_language?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          username?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       add_group_member: {
