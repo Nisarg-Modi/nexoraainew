@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic } from "lucide-react";
+import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,8 @@ import AISuggestions from "./AISuggestions";
 import ChatSummarizer from "./ChatSummarizer";
 import VoiceRecorder from "./VoiceRecorder";
 import MessageTranslator from "./MessageTranslator";
+import { CallInterface } from "./CallInterface";
+import { IncomingCallDialog } from "./IncomingCallDialog";
 import EmojiPicker, { EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -45,6 +47,9 @@ const ChatInterface = ({
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeCall, setActiveCall] = useState<any>(null);
+  const [incomingCall, setIncomingCall] = useState<any>(null);
+  const [callParticipants, setCallParticipants] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -74,6 +79,44 @@ const ChatInterface = ({
       return cleanup;
     }
   }, [conversationId, currentUserId]);
+
+  // Subscribe to incoming calls
+  useEffect(() => {
+    if (!currentUserId || !conversationId) return;
+
+    const channel = supabase
+      .channel('calls-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'calls',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        async (payload) => {
+          const call = payload.new;
+          if (call.caller_id !== currentUserId && call.status === 'ringing') {
+            // Get caller info
+            const { data: callerProfile } = await supabase
+              .from('profiles')
+              .select('display_name')
+              .eq('user_id', call.caller_id)
+              .single();
+
+            setIncomingCall({
+              ...call,
+              callerName: callerProfile?.display_name || 'Unknown',
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, conversationId]);
 
   const initializeConversation = async () => {
     try {
@@ -278,32 +321,179 @@ const ChatInterface = ({
     setShowEmojiPicker(false);
   };
 
+  const startCall = async (isVideo: boolean) => {
+    if (!conversationId || !currentUserId) return;
+
+    try {
+      // Create call record
+      const { data: call, error: callError } = await supabase
+        .from('calls')
+        .insert({
+          conversation_id: conversationId,
+          caller_id: currentUserId,
+          call_type: isVideo ? 'video' : 'audio',
+          status: 'ringing',
+        })
+        .select()
+        .single();
+
+      if (callError) throw callError;
+
+      // Get all participants
+      const { data: participants } = await supabase
+        .from('conversation_participants')
+        .select('user_id')
+        .eq('conversation_id', conversationId);
+
+      if (participants) {
+        // Add all participants to call
+        const participantInserts = participants.map(p => ({
+          call_id: call.id,
+          user_id: p.user_id,
+          status: p.user_id === currentUserId ? 'joined' : 'invited',
+        }));
+
+        await supabase.from('call_participants').insert(participantInserts);
+
+        // Get participant names
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, display_name')
+          .in('user_id', participants.map(p => p.user_id));
+
+        const namesMap = new Map(
+          profiles?.map(p => [p.user_id, p.display_name]) || []
+        );
+        setCallParticipants(namesMap);
+
+        setActiveCall({
+          ...call,
+          participantIds: participants.map(p => p.user_id),
+        });
+      }
+    } catch (error) {
+      console.error('Error starting call:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to start call',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const acceptCall = async () => {
+    if (!incomingCall || !currentUserId) return;
+
+    try {
+      // Update call participant status
+      await supabase
+        .from('call_participants')
+        .update({ status: 'joined', joined_at: new Date().toISOString() })
+        .eq('call_id', incomingCall.id)
+        .eq('user_id', currentUserId);
+
+      // Update call status to active
+      await supabase
+        .from('calls')
+        .update({ status: 'active' })
+        .eq('id', incomingCall.id);
+
+      // Get all participants
+      const { data: participants } = await supabase
+        .from('call_participants')
+        .select('user_id')
+        .eq('call_id', incomingCall.id);
+
+      // Get participant names
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, display_name')
+        .in('user_id', participants?.map(p => p.user_id) || []);
+
+      const namesMap = new Map(
+        profiles?.map(p => [p.user_id, p.display_name]) || []
+      );
+      setCallParticipants(namesMap);
+
+      setActiveCall({
+        ...incomingCall,
+        participantIds: participants?.map(p => p.user_id) || [],
+      });
+      setIncomingCall(null);
+    } catch (error) {
+      console.error('Error accepting call:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to join call',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const rejectCall = async () => {
+    if (!incomingCall || !currentUserId) return;
+
+    try {
+      await supabase
+        .from('call_participants')
+        .update({ status: 'rejected' })
+        .eq('call_id', incomingCall.id)
+        .eq('user_id', currentUserId);
+
+      setIncomingCall(null);
+    } catch (error) {
+      console.error('Error rejecting call:', error);
+    }
+  };
+
+  const endCall = () => {
+    setActiveCall(null);
+    setCallParticipants(new Map());
+  };
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <div className="bg-card border-b border-border px-4 py-3 flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onBack}
-          className="hover:bg-primary/10"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            <span className="font-semibold">{contactName[0].toUpperCase()}</span>
+    <>
+      <div className="min-h-screen bg-background flex flex-col">
+        {/* Header */}
+        <div className="bg-card border-b border-border px-4 py-3 flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="hover:bg-primary/10"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              <span className="font-semibold">{contactName[0].toUpperCase()}</span>
+            </div>
+            <div>
+              <h2 className="font-semibold">{contactName}</h2>
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-2 h-2 bg-accent rounded-full" />
+                {isGroup ? 'Group Chat' : 'Online'} · Encrypted Connection
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold">{contactName}</h2>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <span className="w-2 h-2 bg-accent rounded-full" />
-              {isGroup ? 'Group Chat' : 'Online'} · Encrypted Connection
-            </p>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => startCall(false)}
+            className="hover:bg-primary/10"
+          >
+            <Phone className="w-5 h-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => startCall(true)}
+            className="hover:bg-primary/10"
+          >
+            <Video className="w-5 h-5" />
+          </Button>
+          {conversationId && <ChatSummarizer conversationId={conversationId} />}
         </div>
-        {conversationId && <ChatSummarizer conversationId={conversationId} />}
-      </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -419,6 +609,30 @@ const ChatInterface = ({
         </p>
       </div>
     </div>
+
+    {/* Active Call */}
+    {activeCall && currentUserId && (
+      <CallInterface
+        callId={activeCall.id}
+        userId={currentUserId}
+        participantIds={activeCall.participantIds}
+        participantNames={callParticipants}
+        isVideo={activeCall.call_type === 'video'}
+        onEndCall={endCall}
+      />
+    )}
+
+    {/* Incoming Call Dialog */}
+    {incomingCall && (
+      <IncomingCallDialog
+        open={!!incomingCall}
+        callerName={incomingCall.callerName}
+        isVideo={incomingCall.call_type === 'video'}
+        onAccept={acceptCall}
+        onReject={rejectCall}
+      />
+    )}
+  </>
   );
 };
 
