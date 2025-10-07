@@ -14,27 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      _security_documentation: {
-        Row: {
-          best_practice: string
-          created_at: string | null
-          description: string
-          feature: string
-        }
-        Insert: {
-          best_practice: string
-          created_at?: string | null
-          description: string
-          feature: string
-        }
-        Update: {
-          best_practice?: string
-          created_at?: string | null
-          description?: string
-          feature?: string
-        }
-        Relationships: []
-      }
       call_participants: {
         Row: {
           call_id: string
@@ -348,7 +327,6 @@ export type Database = {
           created_at: string
           display_name: string
           id: string
-          phone_number: string | null
           preferred_language: string | null
           status: string | null
           updated_at: string
@@ -362,7 +340,6 @@ export type Database = {
           created_at?: string
           display_name: string
           id?: string
-          phone_number?: string | null
           preferred_language?: string | null
           status?: string | null
           updated_at?: string
@@ -376,12 +353,32 @@ export type Database = {
           created_at?: string
           display_name?: string
           id?: string
-          phone_number?: string | null
           preferred_language?: string | null
           status?: string | null
           updated_at?: string
           user_id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      profiles_private: {
+        Row: {
+          created_at: string
+          phone_number: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          phone_number?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          phone_number?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -441,48 +438,7 @@ export type Database = {
       }
     }
     Views: {
-      profiles_safe: {
-        Row: {
-          auto_translate: boolean | null
-          avatar_url: string | null
-          bio: string | null
-          created_at: string | null
-          display_name: string | null
-          phone_number: string | null
-          preferred_language: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: string | null
-          username: string | null
-        }
-        Insert: {
-          auto_translate?: boolean | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          display_name?: string | null
-          phone_number?: never
-          preferred_language?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          username?: string | null
-        }
-        Update: {
-          auto_translate?: boolean | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          display_name?: string | null
-          phone_number?: never
-          preferred_language?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          username?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       add_group_member: {

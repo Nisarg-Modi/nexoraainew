@@ -187,12 +187,16 @@ const Auth = () => {
           return;
         }
 
-        // Update profile with phone number if provided
+        // Update profile_private with phone number if provided (secure table with owner-only access)
         if (!error && authData.user && phoneNumber) {
           await supabase
-            .from('profiles')
-            .update({ phone_number: phoneNumber.trim() })
-            .eq('user_id', authData.user.id);
+            .from('profiles_private')
+            .insert({ 
+              user_id: authData.user.id,
+              phone_number: phoneNumber.trim() 
+            })
+            .select()
+            .single();
         }
 
         if (error) {
