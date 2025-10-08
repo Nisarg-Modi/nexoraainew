@@ -22,7 +22,7 @@ const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(100, "Password too long"),
   displayName: z.string().trim().min(2, "Display name must be at least 2 characters").max(50, "Display name too long"),
   phoneNumber: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format (use E.164 format: +1234567890)").optional().or(z.literal("")),
-  gender: z.enum(["male", "female", "other"]).optional(),
+  gender: z.enum(["male", "female", "other"], { required_error: "Please select your gender" }),
 });
 
 const Auth = () => {
@@ -146,7 +146,7 @@ const Auth = () => {
           password, 
           displayName, 
           phoneNumber: phoneNumber || undefined,
-          gender: gender || undefined
+          gender
         });
         
         // Check if username is available (case-insensitive)
@@ -339,8 +339,8 @@ const Auth = () => {
               </div>
               
               <div className="space-y-2">
-                <Label>Gender (optional)</Label>
-                <RadioGroup value={gender} onValueChange={(value) => setGender(value as "male" | "female" | "other")}>
+                <Label>Gender</Label>
+                <RadioGroup value={gender} onValueChange={(value) => setGender(value as "male" | "female" | "other")} required>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="male" id="male" />
                     <Label htmlFor="male" className="font-normal cursor-pointer">Male</Label>
