@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import nexoraLogo from "@/assets/nexora-logo.png";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const loginSchema = z.object({
   username: z.string().trim().min(3, "Username must be at least 3 characters").max(30, "Username too long"),
@@ -21,6 +22,7 @@ const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(100, "Password too long"),
   displayName: z.string().trim().min(2, "Display name must be at least 2 characters").max(50, "Display name too long"),
   phoneNumber: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format (use E.164 format: +1234567890)").optional().or(z.literal("")),
+  gender: z.enum(["male", "female", "other"]).optional(),
 });
 
 const Auth = () => {
@@ -30,6 +32,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "other">();
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -142,7 +145,8 @@ const Auth = () => {
           email, 
           password, 
           displayName, 
-          phoneNumber: phoneNumber || undefined 
+          phoneNumber: phoneNumber || undefined,
+          gender: gender || undefined
         });
         
         // Check if username is available (case-insensitive)
@@ -173,6 +177,7 @@ const Auth = () => {
             data: {
               display_name: displayName.trim(),
               username: username.trim(),
+              gender: gender,
             },
           },
         });
@@ -332,6 +337,24 @@ const Auth = () => {
                   Use international format with + (e.g., +1234567890)
                 </p>
               </div>
+              
+              <div className="space-y-2">
+                <Label>Gender (optional)</Label>
+                <RadioGroup value={gender} onValueChange={(value) => setGender(value as "male" | "female" | "other")}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="male" id="male" />
+                    <Label htmlFor="male" className="font-normal cursor-pointer">Male</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="female" id="female" />
+                    <Label htmlFor="female" className="font-normal cursor-pointer">Female</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="other" id="other" />
+                    <Label htmlFor="other" className="font-normal cursor-pointer">Other</Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </>
           )}
 
@@ -373,6 +396,7 @@ const Auth = () => {
               setEmail("");
               setDisplayName("");
               setPhoneNumber("");
+              setGender(undefined);
             }}
             className="text-sm text-muted-foreground hover:text-primary transition-colors"
           >
