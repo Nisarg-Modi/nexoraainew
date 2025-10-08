@@ -50,6 +50,7 @@ const ChatInterface = ({
   const [activeCall, setActiveCall] = useState<any>(null);
   const [incomingCall, setIncomingCall] = useState<any>(null);
   const [callParticipants, setCallParticipants] = useState<Map<string, string>>(new Map());
+  const [profilesCache, setProfilesCache] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -155,31 +156,37 @@ const ChatInterface = ({
         variant: "destructive",
       });
     } else if (data) {
-      // Fetch sender profiles for group chats
-      const messagesWithProfiles = await Promise.all(
-        data.map(async (msg) => {
-          let senderName = 'Unknown';
-          
-          if (isGroup && msg.sender_id !== currentUserId) {
-            const { data: profile } = await supabase
-              .rpc('get_safe_profile', { profile_user_id: msg.sender_id });
-            senderName = profile?.[0]?.display_name || 'Unknown';
-          }
+      // Get unique sender IDs
+      const uniqueSenderIds = [...new Set(data.map(msg => msg.sender_id))];
+      
+      // Batch fetch all profiles at once
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, display_name')
+        .in('user_id', uniqueSenderIds);
+      
+      // Create profiles cache
+      const newCache = new Map(profiles?.map(p => [p.user_id, p.display_name]) || []);
+      setProfilesCache(newCache);
 
-          return {
-            id: msg.id,
-            text: msg.content || msg.transcription || '',
-            sender: msg.sender_id === currentUserId ? 'user' : 'contact',
-            senderId: msg.sender_id,
-            senderName,
-            timestamp: new Date(msg.created_at),
-            aiGenerated: msg.ai_generated,
-            messageType: (msg.message_type || 'text') as 'text' | 'audio' | 'image',
-            audioData: msg.audio_data || undefined,
-            transcription: msg.transcription || undefined,
-          } as Message;
-        })
-      );
+      // Map messages with cached profiles
+      const messagesWithProfiles = data.map((msg) => {
+        const senderName = newCache.get(msg.sender_id) || 'Unknown';
+
+        return {
+          id: msg.id,
+          text: msg.content || msg.transcription || '',
+          sender: msg.sender_id === currentUserId ? 'user' : 'contact',
+          senderId: msg.sender_id,
+          senderName,
+          timestamp: new Date(msg.created_at),
+          aiGenerated: msg.ai_generated,
+          messageType: (msg.message_type || 'text') as 'text' | 'audio' | 'image',
+          audioData: msg.audio_data || undefined,
+          transcription: msg.transcription || undefined,
+        } as Message;
+      });
+      
       setMessages(messagesWithProfiles);
     }
   };
@@ -197,40 +204,46 @@ const ChatInterface = ({
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
+        async (payload) => {
           const newMsg = payload.new;
           
-          // Fetch sender profile for group chats
-          const fetchSenderProfile = async () => {
+          // Use cached profile or fetch if not in cache
+          let senderName = profilesCache.get(newMsg.sender_id);
+          
+          if (!senderName && isGroup && newMsg.sender_id !== currentUserId) {
             const { data: profile } = await supabase
-              .rpc('get_safe_profile', { profile_user_id: newMsg.sender_id });
+              .from('profiles')
+              .select('display_name')
+              .eq('user_id', newMsg.sender_id)
+              .single();
             
-            return profile?.[0]?.display_name || 'Unknown';
-          };
+            senderName = profile?.display_name || 'Unknown';
+            
+            // Update cache
+            setProfilesCache(prev => new Map(prev).set(newMsg.sender_id, senderName!));
+          }
 
-          fetchSenderProfile().then((senderName) => {
-            setMessages((prev) => {
-              // Avoid duplicate messages
-              if (prev.some(m => m.id === newMsg.id)) {
-                return prev;
-              }
-              
-              return [
-                ...prev,
-                {
-                  id: newMsg.id,
-                  text: newMsg.content || newMsg.transcription || '',
-                  sender: newMsg.sender_id === currentUserId ? 'user' : 'contact',
-                  senderId: newMsg.sender_id,
-                  senderName,
-                  timestamp: new Date(newMsg.created_at),
-                  aiGenerated: newMsg.ai_generated,
-                  messageType: (newMsg.message_type || 'text') as 'text' | 'audio' | 'image',
-                  audioData: newMsg.audio_data || undefined,
-                  transcription: newMsg.transcription || undefined,
-                },
-              ];
-            });
+          setMessages((prev) => {
+            // Avoid duplicate messages
+            if (prev.some(m => m.id === newMsg.id)) {
+              return prev;
+            }
+            
+            return [
+              ...prev,
+              {
+                id: newMsg.id,
+                text: newMsg.content || newMsg.transcription || '',
+                sender: newMsg.sender_id === currentUserId ? 'user' : 'contact',
+                senderId: newMsg.sender_id,
+                senderName: senderName || 'Unknown',
+                timestamp: new Date(newMsg.created_at),
+                aiGenerated: newMsg.ai_generated,
+                messageType: (newMsg.message_type || 'text') as 'text' | 'audio' | 'image',
+                audioData: newMsg.audio_data || undefined,
+                transcription: newMsg.transcription || undefined,
+              },
+            ];
           });
         }
       )
