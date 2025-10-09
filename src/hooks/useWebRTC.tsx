@@ -135,19 +135,22 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
       const channel = supabase.channel(`call:${callId}`);
       channelRef.current = channel;
 
-      channel
+      await channel
         .on('broadcast', { event: 'offer' }, async ({ payload }) => {
           if (payload.to === userId) {
+            console.log('Received offer from:', payload.from);
             await handleOffer(payload.offer, payload.from, stream);
           }
         })
         .on('broadcast', { event: 'answer' }, async ({ payload }) => {
           if (payload.to === userId) {
+            console.log('Received answer from:', payload.from);
             await handleAnswer(payload.answer, payload.from);
           }
         })
         .on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {
           if (payload.to === userId) {
+            console.log('Received ICE candidate from:', payload.from);
             await handleIceCandidate(payload.candidate, payload.from);
           }
         })
