@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Sparkles, Globe, Zap, LogOut, MessageSquare, Search, Crown } from "lucide-react";
+import { Shield, Sparkles, Globe, Zap, LogOut, MessageSquare, Search, Crown, FileText } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
 import ContactsList from "@/components/ContactsList";
 import SemanticSearch from "@/components/SemanticSearch";
 import SubscriptionManagement from "@/components/SubscriptionManagement";
+import { DocumentWallet } from "@/components/DocumentWallet";
 import { useAuth } from "@/hooks/useAuth";
 import { useSemanticSearch } from "@/hooks/useSemanticSearch";
 import nexoraLogo from "@/assets/nexora-logo.png";
@@ -69,18 +70,22 @@ const Index = () => {
         {/* Main Content with Tabs */}
         <div className="container mx-auto px-4 py-6">
           <Tabs defaultValue="contacts" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsList className="grid w-full grid-cols-4 mb-6">
               <TabsTrigger value="contacts" className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Contacts
               </TabsTrigger>
+              <TabsTrigger value="wallet" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Wallet
+              </TabsTrigger>
               <TabsTrigger value="search" className="flex items-center gap-2">
                 <Search className="h-4 w-4" />
-                Semantic Search
+                Search
               </TabsTrigger>
               <TabsTrigger value="subscription" className="flex items-center gap-2">
                 <Crown className="h-4 w-4" />
-                Subscription
+                Premium
               </TabsTrigger>
             </TabsList>
             
@@ -89,6 +94,10 @@ const Index = () => {
                 onStartChat={handleStartChat}
                 onStartGroupChat={handleStartGroupChat}
               />
+            </TabsContent>
+            
+            <TabsContent value="wallet">
+              <DocumentWallet />
             </TabsContent>
             
             <TabsContent value="search">
