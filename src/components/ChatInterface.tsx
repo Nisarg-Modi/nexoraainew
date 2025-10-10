@@ -338,6 +338,8 @@ const ChatInterface = ({
     if (!conversationId || !currentUserId) return;
 
     try {
+      console.log('Starting call for conversation:', conversationId);
+      
       // Create call record
       const { data: call, error: callError } = await supabase
         .from('calls')
@@ -350,45 +352,78 @@ const ChatInterface = ({
         .select()
         .single();
 
-      if (callError) throw callError;
+      if (callError) {
+        console.error('Error creating call:', callError);
+        throw callError;
+      }
+
+      console.log('Call created:', call.id);
 
       // Get all participants
-      const { data: participants } = await supabase
+      const { data: participants, error: participantsError } = await supabase
         .from('conversation_participants')
         .select('user_id')
         .eq('conversation_id', conversationId);
 
-      if (participants) {
-        // Add all participants to call
-        const participantInserts = participants.map(p => ({
-          call_id: call.id,
-          user_id: p.user_id,
-          status: p.user_id === currentUserId ? 'joined' : 'invited',
-        }));
-
-        await supabase.from('call_participants').insert(participantInserts);
-
-        // Get participant names
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('user_id, display_name')
-          .in('user_id', participants.map(p => p.user_id));
-
-        const namesMap = new Map(
-          profiles?.map(p => [p.user_id, p.display_name]) || []
-        );
-        setCallParticipants(namesMap);
-
-        setActiveCall({
-          ...call,
-          participantIds: participants.map(p => p.user_id),
-        });
+      if (participantsError) {
+        console.error('Error fetching participants:', participantsError);
+        throw participantsError;
       }
+
+      if (!participants || participants.length === 0) {
+        throw new Error('No participants found for conversation');
+      }
+
+      console.log('Found participants:', participants.map(p => p.user_id));
+
+      // Add all participants to call
+      const participantInserts = participants.map(p => ({
+        call_id: call.id,
+        user_id: p.user_id,
+        status: p.user_id === currentUserId ? 'joined' : 'invited',
+      }));
+
+      console.log('Inserting call participants:', participantInserts);
+
+      const { error: insertError } = await supabase
+        .from('call_participants')
+        .insert(participantInserts);
+
+      if (insertError) {
+        console.error('Error inserting call participants:', insertError);
+        throw insertError;
+      }
+
+      console.log('Call participants added successfully');
+
+      // Get participant names
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, display_name')
+        .in('user_id', participants.map(p => p.user_id));
+
+      const namesMap = new Map(
+        profiles?.map(p => [p.user_id, p.display_name]) || []
+      );
+      setCallParticipants(namesMap);
+
+      const participantIds = participants.map(p => p.user_id);
+      console.log('Setting active call with participant IDs:', participantIds);
+
+      setActiveCall({
+        ...call,
+        participantIds,
+      });
+
+      toast({
+        title: 'Call started',
+        description: `${isVideo ? 'Video' : 'Voice'} call initiated`,
+      });
     } catch (error) {
       console.error('Error starting call:', error);
       toast({
         title: 'Error',
-        description: 'Failed to start call',
+        description: error instanceof Error ? error.message : 'Failed to start call',
         variant: 'destructive',
       });
     }
