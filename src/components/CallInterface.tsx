@@ -102,70 +102,110 @@ export const CallInterface = ({
     );
   }
 
+  // Get the first remote participant for main view
+  const mainParticipant = Array.from(remoteStreams.entries())[0];
+
   return (
     <Card className="fixed inset-4 z-50 flex flex-col bg-background/95 backdrop-blur">
-      {/* Video Grid */}
-      <div className="flex-1 grid grid-cols-2 gap-2 p-4">
-        {/* Local Video */}
-        <div className="relative rounded-lg overflow-hidden bg-muted">
-          {isVideo ? (
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
-                <Users className="w-12 h-12 text-primary" />
-              </div>
-            </div>
-          )}
-          <div className="absolute bottom-2 left-2 bg-background/80 px-2 py-1 rounded text-sm">
-            You
-          </div>
-        </div>
-
-        {/* Remote Videos */}
-        {Array.from(remoteStreams.entries()).map(([participantId, stream]) => (
-          <div key={participantId} className="relative rounded-lg overflow-hidden bg-muted">
+      {/* Main Video Area */}
+      <div className="flex-1 p-4 flex items-center justify-center">
+        {mainParticipant ? (
+          <div className="relative w-full h-full rounded-lg overflow-hidden bg-muted">
             {isVideo ? (
               <video
                 ref={(el) => {
-                  if (el) {
-                    el.srcObject = stream;
-                    remoteVideosRef.current.set(participantId, el);
+                  if (el && mainParticipant[1]) {
+                    el.srcObject = mainParticipant[1];
+                    el.play().catch(e => console.error('Error playing video:', e));
                   }
                 }}
                 autoPlay
+                playsInline
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Users className="w-16 h-16 text-primary" />
+                </div>
+              </div>
+            )}
+            <div className="absolute bottom-4 left-4 bg-background/80 px-3 py-2 rounded text-base">
+              {participantNames.get(mainParticipant[0]) || 'Participant'}
+            </div>
+          </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <Phone className="w-16 h-16 animate-pulse mx-auto text-muted-foreground" />
+              <p className="text-lg text-muted-foreground">Waiting for others to join...</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Thumbnail Strip */}
+      <div className="px-4 pb-4">
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {/* Local Video Thumbnail */}
+          <div className="relative flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-muted border-2 border-primary">
+            {isVideo ? (
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
                 playsInline
                 className="w-full h-full object-cover"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Users className="w-12 h-12 text-primary" />
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Users className="w-6 h-6 text-primary" />
                 </div>
               </div>
             )}
-            <div className="absolute bottom-2 left-2 bg-background/80 px-2 py-1 rounded text-sm">
-              {participantNames.get(participantId) || 'Unknown'}
+            <div className="absolute bottom-1 left-1 bg-background/80 px-2 py-0.5 rounded text-xs">
+              You
             </div>
           </div>
-        ))}
 
-        {/* Empty slots */}
-        {participantIds.length - remoteStreams.size - 1 > 0 &&
-          Array.from({ length: participantIds.length - remoteStreams.size - 1 }).map((_, i) => (
-            <div key={`empty-${i}`} className="rounded-lg bg-muted flex items-center justify-center">
-              <div className="text-center space-y-2">
-                <Phone className="w-8 h-8 animate-pulse mx-auto text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Connecting...</p>
+          {/* Other Remote Video Thumbnails */}
+          {Array.from(remoteStreams.entries()).slice(1).map(([participantId, stream]) => (
+            <div key={participantId} className="relative flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-muted">
+              {isVideo ? (
+                <video
+                  ref={(el) => {
+                    if (el && stream) {
+                      el.srcObject = stream;
+                      el.play().catch(e => console.error('Error playing video:', e));
+                      remoteVideosRef.current.set(participantId, el);
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Users className="w-6 h-6 text-primary" />
+                  </div>
+                </div>
+              )}
+              <div className="absolute bottom-1 left-1 bg-background/80 px-2 py-0.5 rounded text-xs">
+                {participantNames.get(participantId) || 'Unknown'}
               </div>
             </div>
           ))}
+
+          {/* Empty slots for participants not yet connected */}
+          {participantIds.length - remoteStreams.size - 1 > 0 &&
+            Array.from({ length: participantIds.length - remoteStreams.size - 1 }).map((_, i) => (
+              <div key={`empty-${i}`} className="flex-shrink-0 w-32 h-24 rounded-lg bg-muted flex items-center justify-center">
+                <Phone className="w-6 h-6 animate-pulse text-muted-foreground" />
+              </div>
+            ))}
+        </div>
       </div>
 
       {/* Controls */}
