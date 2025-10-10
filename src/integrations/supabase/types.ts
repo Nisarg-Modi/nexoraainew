@@ -638,6 +638,14 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      is_call_participant: {
+        Args: { call_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
+      is_caller: {
+        Args: { call_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
       is_conversation_participant: {
         Args: { conversation_uuid: string; user_uuid: string }
         Returns: boolean
