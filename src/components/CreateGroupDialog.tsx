@@ -4,10 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Users } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Users, Camera, Upload, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { Camera as CapacitorCamera } from '@capacitor/camera';
+import { CameraResultType, CameraSource } from '@capacitor/camera';
 
 interface Contact {
   id: string;
@@ -30,9 +33,11 @@ const groupSchema = z.object({
 const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
   const [open, setOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [groupAvatarUrl, setGroupAvatarUrl] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -71,6 +76,63 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
     }
   };
 
+  const handleImageUpload = async (source: 'camera' | 'gallery') => {
+    try {
+      setUploading(true);
+      
+      const image = await CapacitorCamera.getPhoto({
+        quality: 80,
+        allowEditing: true,
+        resultType: CameraResultType.DataUrl,
+        source: source === 'camera' ? CameraSource.Camera : CameraSource.Photos,
+        width: 500,
+        height: 500
+      });
+
+      if (!image.dataUrl) {
+        throw new Error('No image data received');
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const response = await fetch(image.dataUrl);
+      const blob = await response.blob();
+      
+      const fileName = `group-${Date.now()}.${image.format}`;
+      const filePath = `avatars/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, blob, {
+          contentType: `image/${image.format}`,
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(filePath);
+
+      setGroupAvatarUrl(publicUrl);
+
+      toast({
+        title: "Image uploaded",
+        description: "Group icon has been set"
+      });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const toggleMember = (userId: string) => {
     setSelectedMembers(prev =>
       prev.includes(userId)
@@ -103,6 +165,13 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
 
       if (error) throw error;
 
+      if (data && groupAvatarUrl) {
+        await supabase
+          .from('conversations')
+          .update({ group_avatar_url: groupAvatarUrl })
+          .eq('id', data);
+      }
+
       toast({
         title: "Group created!",
         description: `${groupName} has been created with ${selectedMembers.length} members`,
@@ -110,6 +179,7 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
 
       onGroupCreated(data, groupName);
       setGroupName("");
+      setGroupAvatarUrl("");
       setSelectedMembers([]);
       setOpen(false);
     } catch (error) {
@@ -140,6 +210,44 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-4">
+          <div className="flex flex-col items-center gap-3 p-4 bg-muted/30 rounded-lg">
+            <Avatar className="w-20 h-20">
+              {groupAvatarUrl ? (
+                <img src={groupAvatarUrl} alt="Group" className="w-full h-full object-cover" />
+              ) : (
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  <Users className="w-8 h-8" />
+                </AvatarFallback>
+              )}
+            </Avatar>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleImageUpload('camera')}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                ) : (
+                  <Camera className="w-3 h-3 mr-1" />
+                )}
+                Camera
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleImageUpload('gallery')}
+                disabled={uploading}
+              >
+                <Upload className="w-3 h-3 mr-1" />
+                Gallery
+              </Button>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="groupName">Group Name</Label>
             <Input
