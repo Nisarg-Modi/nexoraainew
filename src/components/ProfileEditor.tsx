@@ -74,8 +74,8 @@ export const ProfileEditor = () => {
       const response = await fetch(image.dataUrl);
       const blob = await response.blob();
       
-      const fileName = `${user.id}-${Date.now()}.${image.format}`;
-      const filePath = `avatars/${fileName}`;
+      const fileName = `${Date.now()}.${image.format}`;
+      const filePath = `avatars/${user.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
