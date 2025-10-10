@@ -75,10 +75,10 @@ export const ProfileEditor = () => {
       const blob = await response.blob();
       
       const fileName = `${Date.now()}.${image.format}`;
-      const filePath = `avatars/${user.id}/${fileName}`;
+      const filePath = `${user.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('documents')
+        .from('avatars')
         .upload(filePath, blob, {
           contentType: `image/${image.format}`,
           upsert: true
@@ -87,7 +87,7 @@ export const ProfileEditor = () => {
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('documents')
+        .from('avatars')
         .getPublicUrl(filePath);
 
       setProfile(prev => ({ ...prev, avatar_url: publicUrl }));

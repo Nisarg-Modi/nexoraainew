@@ -100,10 +100,10 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
       const blob = await response.blob();
       
       const fileName = `group-${Date.now()}.${image.format}`;
-      const filePath = `avatars/${user.id}/${fileName}`;
+      const filePath = `${user.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('documents')
+        .from('avatars')
         .upload(filePath, blob, {
           contentType: `image/${image.format}`,
           upsert: true
@@ -112,7 +112,7 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('documents')
+        .from('avatars')
         .getPublicUrl(filePath);
 
       setGroupAvatarUrl(publicUrl);
