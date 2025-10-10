@@ -29,6 +29,8 @@ export const CallInterface = ({
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
+  console.log('CallInterface render - participantIds:', participantIds.length, 'isVideo:', isVideo);
+
   const {
     localStream,
     remoteStreams,
@@ -42,16 +44,20 @@ export const CallInterface = ({
     userId,
     isVideo,
     onRemoteStream: (stream) => {
-      console.log('New remote stream received');
+      console.log('New remote stream received, tracks:', stream.getTracks().map(t => t.kind));
     },
   });
 
+  console.log('CallInterface - localStream:', !!localStream, 'remoteStreams:', remoteStreams.size);
+
   useEffect(() => {
+    console.log('Initializing call with participants:', participantIds);
     initializeCall(participantIds);
   }, []);
 
   useEffect(() => {
     if (localStream && localVideoRef.current) {
+      console.log('Setting local stream to video element');
       localVideoRef.current.srcObject = localStream;
       localVideoRef.current.play().catch(e => console.error('Error playing local video:', e));
     }
@@ -107,9 +113,18 @@ export const CallInterface = ({
   const mainParticipant = Array.from(remoteStreams.entries())[0];
   const [mainVideoRef, setMainVideoRef] = useState<HTMLVideoElement | null>(null);
 
+  // Log remote streams changes
+  useEffect(() => {
+    console.log('Remote streams updated. Count:', remoteStreams.size);
+    remoteStreams.forEach((stream, id) => {
+      console.log(`  - Participant ${id}: ${stream.getTracks().map(t => `${t.kind} (${t.enabled})`).join(', ')}`);
+    });
+  }, [remoteStreams]);
+
   // Set up main video when participant or stream changes
   useEffect(() => {
     if (mainVideoRef && mainParticipant?.[1]) {
+      console.log('Setting main video for participant:', mainParticipant[0]);
       mainVideoRef.srcObject = mainParticipant[1];
       mainVideoRef.play().catch(e => console.error('Error playing main video:', e));
     }

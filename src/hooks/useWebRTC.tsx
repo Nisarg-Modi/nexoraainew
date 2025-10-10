@@ -27,10 +27,18 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
 
   const startLocalStream = async () => {
     try {
+      console.log('Requesting getUserMedia with video:', isVideo, 'audio:', true);
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: isVideo,
-        audio: true,
+        video: isVideo ? {
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } : false,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        },
       });
+      console.log('Got local stream with tracks:', stream.getTracks().map(t => `${t.kind} (${t.label})`));
       setLocalStream(stream);
       return stream;
     } catch (error) {
@@ -51,14 +59,25 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
     // Handle incoming remote tracks
     pc.ontrack = (event) => {
       console.log(`Received remote ${event.track.kind} track from:`, participantId);
+      console.log('Track state - readyState:', event.track.readyState, 'enabled:', event.track.enabled);
       
       if (event.streams && event.streams[0]) {
         const remoteStream = event.streams[0];
-        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => t.kind));
+        console.log('Remote stream ID:', remoteStream.id);
+        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind} (enabled: ${t.enabled}, readyState: ${t.readyState})`));
+        
+        // Ensure tracks are enabled
+        remoteStream.getTracks().forEach(track => {
+          if (!track.enabled) {
+            console.log('Enabling disabled track:', track.kind);
+            track.enabled = true;
+          }
+        });
         
         setRemoteStreams(prev => {
           const updated = new Map(prev);
           updated.set(participantId, remoteStream);
+          console.log('Updated remote streams. Total:', updated.size);
           return updated;
         });
         onRemoteStream?.(remoteStream);
