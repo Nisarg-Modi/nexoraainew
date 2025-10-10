@@ -8,7 +8,9 @@ import SemanticSearch from "@/components/SemanticSearch";
 import SubscriptionManagement from "@/components/SubscriptionManagement";
 import { DocumentWallet } from "@/components/DocumentWallet";
 import { ProfileEditor } from "@/components/ProfileEditor";
+import { AdminDashboard } from "@/components/AdminDashboard";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { useSemanticSearch } from "@/hooks/useSemanticSearch";
 import nexoraLogo from "@/assets/nexora-logo.png";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
@@ -17,6 +19,7 @@ const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
   const [selectedContact, setSelectedContact] = useState<{ userId: string; name: string; isGroup?: boolean; conversationId?: string } | null>(null);
   const { signOut, user } = useAuth();
+  const { isAdmin } = useAdminCheck();
   
   // Initialize semantic search hook for real-time embedding generation
   useSemanticSearch();
@@ -71,7 +74,7 @@ const Index = () => {
         {/* Main Content with Tabs */}
         <div className="container mx-auto px-4 py-6">
           <Tabs defaultValue="contacts" className="w-full">
-            <TabsList className="grid w-full grid-cols-5 mb-6">
+            <TabsList className={`grid w-full mb-6 ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'}`}>
               <TabsTrigger value="contacts" className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Contacts
@@ -92,6 +95,12 @@ const Index = () => {
                 <Crown className="h-4 w-4" />
                 Premium
               </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="admin" className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Admin
+                </TabsTrigger>
+              )}
             </TabsList>
             
             <TabsContent value="contacts">
@@ -122,6 +131,12 @@ const Index = () => {
             <TabsContent value="subscription">
               <SubscriptionManagement />
             </TabsContent>
+            
+            {isAdmin && (
+              <TabsContent value="admin">
+                <AdminDashboard />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </div>
