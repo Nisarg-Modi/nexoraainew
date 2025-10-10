@@ -42,31 +42,42 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
   const createPeerConnection = (participantId: string, stream: MediaStream) => {
     const pc = new RTCPeerConnection(configuration);
 
-    // Add local tracks
+    // Add local tracks to peer connection
     stream.getTracks().forEach(track => {
+      console.log(`Adding ${track.kind} track to peer connection for ${participantId}`);
       pc.addTrack(track, stream);
     });
 
-    // Handle remote stream
+    // Handle incoming remote tracks
     pc.ontrack = (event) => {
-      console.log('Received remote track from:', participantId);
-      const [remoteStream] = event.streams;
-      setRemoteStreams(prev => {
-        const updated = new Map(prev);
-        updated.set(participantId, remoteStream);
-        return updated;
-      });
-      onRemoteStream?.(remoteStream);
+      console.log(`Received remote ${event.track.kind} track from:`, participantId);
+      
+      if (event.streams && event.streams[0]) {
+        const remoteStream = event.streams[0];
+        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => t.kind));
+        
+        setRemoteStreams(prev => {
+          const updated = new Map(prev);
+          updated.set(participantId, remoteStream);
+          return updated;
+        });
+        onRemoteStream?.(remoteStream);
+      }
     };
 
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        supabase.channel(`call:${callId}`).send({
+        console.log('Sending ICE candidate to:', participantId);
+        channelRef.current?.send({
           type: 'broadcast',
           event: 'ice-candidate',
           payload: {
-            candidate: event.candidate,
+            candidate: {
+              candidate: event.candidate.candidate,
+              sdpMLineIndex: event.candidate.sdpMLineIndex,
+              sdpMid: event.candidate.sdpMid,
+            },
             from: userId,
             to: participantId,
           },
@@ -74,8 +85,17 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
       }
     };
 
+    // Monitor connection state
     pc.oniceconnectionstatechange = () => {
-      console.log('ICE connection state:', pc.iceConnectionState);
+      console.log(`ICE connection state for ${participantId}:`, pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed') {
+        console.error('ICE connection failed, attempting restart');
+        pc.restartIce();
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log(`Connection state for ${participantId}:`, pc.connectionState);
     };
 
     peerConnections.current.set(participantId, pc);
@@ -83,59 +103,107 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
   };
 
   const makeOffer = async (participantId: string, stream: MediaStream) => {
-    const pc = createPeerConnection(participantId, stream);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+    try {
+      console.log('Creating offer for:', participantId);
+      const pc = createPeerConnection(participantId, stream);
+      
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: isVideo,
+      });
+      
+      await pc.setLocalDescription(offer);
+      console.log('Sending offer to:', participantId);
 
-    await supabase.channel(`call:${callId}`).send({
-      type: 'broadcast',
-      event: 'offer',
-      payload: {
-        offer,
-        from: userId,
-        to: participantId,
-      },
-    });
+      await channelRef.current?.send({
+        type: 'broadcast',
+        event: 'offer',
+        payload: {
+          offer: {
+            type: offer.type,
+            sdp: offer.sdp,
+          },
+          from: userId,
+          to: participantId,
+        },
+      });
+    } catch (error) {
+      console.error('Error making offer:', error);
+    }
   };
 
   const handleOffer = async (offer: RTCSessionDescriptionInit, from: string, stream: MediaStream) => {
-    const pc = createPeerConnection(from, stream);
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
+    try {
+      console.log('Handling offer from:', from);
+      const pc = createPeerConnection(from, stream);
+      
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log('Remote description set for:', from);
+      
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      console.log('Sending answer to:', from);
 
-    await supabase.channel(`call:${callId}`).send({
-      type: 'broadcast',
-      event: 'answer',
-      payload: {
-        answer,
-        from: userId,
-        to: from,
-      },
-    });
+      await channelRef.current?.send({
+        type: 'broadcast',
+        event: 'answer',
+        payload: {
+          answer: {
+            type: answer.type,
+            sdp: answer.sdp,
+          },
+          from: userId,
+          to: from,
+        },
+      });
+    } catch (error) {
+      console.error('Error handling offer:', error);
+    }
   };
 
   const handleAnswer = async (answer: RTCSessionDescriptionInit, from: string) => {
-    const pc = peerConnections.current.get(from);
-    if (pc) {
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    try {
+      const pc = peerConnections.current.get(from);
+      if (pc) {
+        console.log('Setting remote answer from:', from);
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      } else {
+        console.error('No peer connection found for:', from);
+      }
+    } catch (error) {
+      console.error('Error handling answer:', error);
     }
   };
 
   const handleIceCandidate = async (candidate: RTCIceCandidateInit, from: string) => {
-    const pc = peerConnections.current.get(from);
-    if (pc) {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    try {
+      const pc = peerConnections.current.get(from);
+      if (pc && pc.remoteDescription) {
+        console.log('Adding ICE candidate from:', from);
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } else {
+        console.warn('Cannot add ICE candidate - no peer connection or remote description for:', from);
+      }
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
     }
   };
 
   const initializeCall = async (participantIds: string[]) => {
     setIsConnecting(true);
     try {
-      const stream = await startLocalStream();
+      console.log('Initializing call with participants:', participantIds);
+      console.log('Requesting media - audio:', true, 'video:', isVideo);
       
-      // Subscribe to signaling channel
-      const channel = supabase.channel(`call:${callId}`);
+      const stream = await startLocalStream();
+      console.log('Local stream acquired with tracks:', stream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+      
+      // Subscribe to signaling channel FIRST
+      const channel = supabase.channel(`call:${callId}`, {
+        config: {
+          broadcast: { self: false },
+        },
+      });
       channelRef.current = channel;
 
       await channel
@@ -157,16 +225,25 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
             await handleIceCandidate(payload.candidate, payload.from);
           }
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Channel subscription status:', status);
+        });
 
-      // Create offers to all participants
+      // Wait a bit for channel to be ready
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create offers to all other participants
       for (const participantId of participantIds) {
         if (participantId !== userId) {
+          console.log('Making offer to:', participantId);
           await makeOffer(participantId, stream);
+          // Small delay between offers to avoid overwhelming
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
     } catch (error) {
       console.error('Error initializing call:', error);
+      throw error;
     } finally {
       setIsConnecting(false);
     }
