@@ -53,6 +53,7 @@ export const CallInterface = ({
   useEffect(() => {
     if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(e => console.error('Error playing local video:', e));
     }
   }, [localStream]);
 
@@ -104,6 +105,15 @@ export const CallInterface = ({
 
   // Get the first remote participant for main view
   const mainParticipant = Array.from(remoteStreams.entries())[0];
+  const [mainVideoRef, setMainVideoRef] = useState<HTMLVideoElement | null>(null);
+
+  // Set up main video when participant or stream changes
+  useEffect(() => {
+    if (mainVideoRef && mainParticipant?.[1]) {
+      mainVideoRef.srcObject = mainParticipant[1];
+      mainVideoRef.play().catch(e => console.error('Error playing main video:', e));
+    }
+  }, [mainVideoRef, mainParticipant]);
 
   return (
     <Card className="fixed inset-4 z-50 flex flex-col bg-background/95 backdrop-blur">
@@ -113,12 +123,7 @@ export const CallInterface = ({
           <div className="relative w-full h-full rounded-lg overflow-hidden bg-muted">
             {isVideo ? (
               <video
-                ref={(el) => {
-                  if (el && mainParticipant[1]) {
-                    el.srcObject = mainParticipant[1];
-                    el.play().catch(e => console.error('Error playing video:', e));
-                  }
-                }}
+                ref={setMainVideoRef}
                 autoPlay
                 playsInline
                 className="w-full h-full object-contain"
@@ -170,33 +175,45 @@ export const CallInterface = ({
           </div>
 
           {/* Other Remote Video Thumbnails */}
-          {Array.from(remoteStreams.entries()).slice(1).map(([participantId, stream]) => (
-            <div key={participantId} className="relative flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-muted">
-              {isVideo ? (
+          {Array.from(remoteStreams.entries()).slice(1).map(([participantId, stream]) => {
+            const ThumbnailVideo = () => {
+              const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+              
+              useEffect(() => {
+                if (videoEl && stream) {
+                  videoEl.srcObject = stream;
+                  videoEl.play().catch(e => console.error('Error playing thumbnail video:', e));
+                  remoteVideosRef.current.set(participantId, videoEl);
+                }
+              }, [videoEl, stream]);
+
+              return (
                 <video
-                  ref={(el) => {
-                    if (el && stream) {
-                      el.srcObject = stream;
-                      el.play().catch(e => console.error('Error playing video:', e));
-                      remoteVideosRef.current.set(participantId, el);
-                    }
-                  }}
+                  ref={setVideoEl}
                   autoPlay
                   playsInline
                   className="w-full h-full object-cover"
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-primary" />
+              );
+            };
+
+            return (
+              <div key={participantId} className="relative flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-muted">
+                {isVideo ? (
+                  <ThumbnailVideo />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Users className="w-6 h-6 text-primary" />
+                    </div>
                   </div>
+                )}
+                <div className="absolute bottom-1 left-1 bg-background/80 px-2 py-0.5 rounded text-xs">
+                  {participantNames.get(participantId) || 'Unknown'}
                 </div>
-              )}
-              <div className="absolute bottom-1 left-1 bg-background/80 px-2 py-0.5 rounded text-xs">
-                {participantNames.get(participantId) || 'Unknown'}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Empty slots for participants not yet connected */}
           {participantIds.length - remoteStreams.size - 1 > 0 &&
