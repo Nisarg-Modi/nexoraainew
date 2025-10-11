@@ -48,38 +48,62 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
   };
 
   const createPeerConnection = (participantId: string, stream: MediaStream) => {
+    console.log('🔌 Creating peer connection for:', participantId);
     const pc = new RTCPeerConnection(configuration);
 
     // Add local tracks to peer connection
     stream.getTracks().forEach(track => {
-      console.log(`Adding ${track.kind} track to peer connection for ${participantId}`);
+      console.log(`➕ Adding ${track.kind} track:`, {
+        id: track.id,
+        label: track.label,
+        enabled: track.enabled,
+        readyState: track.readyState
+      });
       pc.addTrack(track, stream);
     });
 
     // Handle incoming remote tracks
     pc.ontrack = (event) => {
-      console.log(`Received remote ${event.track.kind} track from:`, participantId);
-      console.log('Track state - readyState:', event.track.readyState, 'enabled:', event.track.enabled);
+      console.log(`🎥 Received remote ${event.track.kind} track from:`, participantId);
+      console.log('📊 Track details:', {
+        id: event.track.id,
+        readyState: event.track.readyState,
+        enabled: event.track.enabled,
+        muted: event.track.muted
+      });
       
       if (event.streams && event.streams[0]) {
         const remoteStream = event.streams[0];
-        console.log('Remote stream ID:', remoteStream.id);
-        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind} (enabled: ${t.enabled}, readyState: ${t.readyState})`));
+        console.log('📺 Remote stream details:', {
+          id: remoteStream.id,
+          active: remoteStream.active,
+          tracks: remoteStream.getTracks().map(t => ({
+            kind: t.kind,
+            id: t.id,
+            enabled: t.enabled,
+            readyState: t.readyState,
+            muted: t.muted
+          }))
+        });
         
-        // Ensure tracks are enabled
+        // Ensure all tracks are enabled and not muted
         remoteStream.getTracks().forEach(track => {
           if (!track.enabled) {
-            console.log('Enabling disabled track:', track.kind);
+            console.warn('⚠️ Track was disabled, enabling:', track.kind);
             track.enabled = true;
+          }
+          if (track.muted) {
+            console.warn('⚠️ Track is muted:', track.kind);
           }
         });
         
         setRemoteStreams(prev => {
           const updated = new Map(prev);
           updated.set(participantId, remoteStream);
-          console.log('Updated remote streams. Total:', updated.size);
+          console.log('✅ Updated remote streams. Total participants:', updated.size);
           return updated;
         });
+        
         onRemoteStream?.(remoteStream);
       }
     };
@@ -87,7 +111,7 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log('Sending ICE candidate to:', participantId);
+        console.log('🧊 Sending ICE candidate to:', participantId);
         channelRef.current?.send({
           type: 'broadcast',
           event: 'ice-candidate',
@@ -104,17 +128,32 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
       }
     };
 
-    // Monitor connection state
+    // Monitor ICE connection state
     pc.oniceconnectionstatechange = () => {
-      console.log(`ICE connection state for ${participantId}:`, pc.iceConnectionState);
+      console.log(`🧊 ICE state [${participantId}]:`, pc.iceConnectionState);
+      
       if (pc.iceConnectionState === 'failed') {
-        console.error('ICE connection failed, attempting restart');
+        console.error('❌ ICE connection failed, attempting restart');
         pc.restartIce();
+      } else if (pc.iceConnectionState === 'connected') {
+        console.log('✅ ICE connection established');
       }
     };
 
+    // Monitor overall connection state
     pc.onconnectionstatechange = () => {
-      console.log(`Connection state for ${participantId}:`, pc.connectionState);
+      console.log(`🔗 Connection state [${participantId}]:`, pc.connectionState);
+      
+      if (pc.connectionState === 'connected') {
+        console.log('✅ Peer connection fully established');
+      } else if (pc.connectionState === 'failed') {
+        console.error('❌ Peer connection failed');
+      }
+    };
+
+    // Monitor signaling state
+    pc.onsignalingstatechange = () => {
+      console.log(`📡 Signaling state [${participantId}]:`, pc.signalingState);
     };
 
     peerConnections.current.set(participantId, pc);
@@ -211,13 +250,18 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
   const initializeCall = async (participantIds: string[]) => {
     setIsConnecting(true);
     try {
-      console.log('Initializing call with participants:', participantIds);
-      console.log('Requesting media - audio:', true, 'video:', isVideo);
+      console.log('🚀 Initializing call with participants:', participantIds);
+      console.log('📞 Media constraints - audio: true, video:', isVideo);
       
+      // Get local media stream first
       const stream = await startLocalStream();
-      console.log('Local stream acquired with tracks:', stream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+      console.log('✅ Local stream acquired:', {
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length,
+        active: stream.active
+      });
       
-      // Subscribe to signaling channel FIRST
+      // Set up signaling channel
       const channel = supabase.channel(`call:${callId}`, {
         config: {
           broadcast: { self: false },
@@ -225,43 +269,47 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
       });
       channelRef.current = channel;
 
-      await channel
+      // Subscribe to signaling events
+      channel
         .on('broadcast', { event: 'offer' }, async ({ payload }) => {
           if (payload.to === userId) {
-            console.log('Received offer from:', payload.from);
+            console.log('📨 Received offer from:', payload.from);
             await handleOffer(payload.offer, payload.from, stream);
           }
         })
         .on('broadcast', { event: 'answer' }, async ({ payload }) => {
           if (payload.to === userId) {
-            console.log('Received answer from:', payload.from);
+            console.log('📨 Received answer from:', payload.from);
             await handleAnswer(payload.answer, payload.from);
           }
         })
         .on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {
           if (payload.to === userId) {
-            console.log('Received ICE candidate from:', payload.from);
+            console.log('📨 Received ICE candidate from:', payload.from);
             await handleIceCandidate(payload.candidate, payload.from);
           }
         })
-        .subscribe((status) => {
-          console.log('Channel subscription status:', status);
+        .subscribe(async (status) => {
+          console.log('📡 Channel status:', status);
+          
+          if (status === 'SUBSCRIBED') {
+            // Wait a moment for full connection
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Now initiate connections to other participants
+            console.log('👥 Creating peer connections...');
+            for (const participantId of participantIds) {
+              if (participantId !== userId) {
+                console.log('🤝 Initiating connection to:', participantId);
+                await makeOffer(participantId, stream);
+                await new Promise(resolve => setTimeout(resolve, 300));
+              }
+            }
+          }
         });
 
-      // Wait a bit for channel to be ready
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Create offers to all other participants
-      for (const participantId of participantIds) {
-        if (participantId !== userId) {
-          console.log('Making offer to:', participantId);
-          await makeOffer(participantId, stream);
-          // Small delay between offers to avoid overwhelming
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
     } catch (error) {
-      console.error('Error initializing call:', error);
+      console.error('❌ Error initializing call:', error);
       throw error;
     } finally {
       setIsConnecting(false);

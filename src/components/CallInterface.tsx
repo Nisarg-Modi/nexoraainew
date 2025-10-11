@@ -57,9 +57,22 @@ export const CallInterface = ({
 
   useEffect(() => {
     if (localStream && localVideoRef.current) {
-      console.log('Setting local stream to video element');
+      console.log('🎥 Setting local stream to video element');
+      console.log('📊 Local stream state:', {
+        active: localStream.active,
+        tracks: localStream.getTracks().map(t => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          readyState: t.readyState,
+          muted: t.muted
+        }))
+      });
+      
       localVideoRef.current.srcObject = localStream;
-      localVideoRef.current.play().catch(e => console.error('Error playing local video:', e));
+      localVideoRef.current.muted = true; // Always mute own video
+      localVideoRef.current.play()
+        .then(() => console.log('✅ Local video playing'))
+        .catch(e => console.error('❌ Error playing local video:', e));
     }
   }, [localStream]);
 
@@ -124,9 +137,25 @@ export const CallInterface = ({
   // Set up main video when participant or stream changes
   useEffect(() => {
     if (mainVideoRef && mainParticipant?.[1]) {
-      console.log('Setting main video for participant:', mainParticipant[0]);
-      mainVideoRef.srcObject = mainParticipant[1];
-      mainVideoRef.play().catch(e => console.error('Error playing main video:', e));
+      const [participantId, stream] = mainParticipant;
+      console.log('🎬 Setting main video for participant:', participantId);
+      console.log('📊 Main stream state:', {
+        id: stream.id,
+        active: stream.active,
+        tracks: stream.getTracks().map(t => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          readyState: t.readyState,
+          muted: t.muted
+        }))
+      });
+      
+      mainVideoRef.srcObject = stream;
+      mainVideoRef.muted = false; // Allow audio from remote participant
+      mainVideoRef.volume = 1.0; // Full volume
+      mainVideoRef.play()
+        .then(() => console.log('✅ Main video playing'))
+        .catch(e => console.error('❌ Error playing main video:', e));
     }
   }, [mainVideoRef, mainParticipant]);
 
@@ -141,6 +170,7 @@ export const CallInterface = ({
                 ref={setMainVideoRef}
                 autoPlay
                 playsInline
+                muted={false}
                 className="w-full h-full object-contain"
               />
             ) : (
@@ -196,8 +226,13 @@ export const CallInterface = ({
               
               useEffect(() => {
                 if (videoEl && stream) {
+                  console.log('🎬 Setting thumbnail video for:', participantId);
                   videoEl.srcObject = stream;
-                  videoEl.play().catch(e => console.error('Error playing thumbnail video:', e));
+                  videoEl.muted = false; // Allow audio
+                  videoEl.volume = 1.0;
+                  videoEl.play()
+                    .then(() => console.log('✅ Thumbnail video playing'))
+                    .catch(e => console.error('❌ Error playing thumbnail:', e));
                   remoteVideosRef.current.set(participantId, videoEl);
                 }
               }, [videoEl, stream]);
@@ -207,6 +242,7 @@ export const CallInterface = ({
                   ref={setVideoEl}
                   autoPlay
                   playsInline
+                  muted={false}
                   className="w-full h-full object-cover"
                 />
               );
