@@ -14,6 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      bot_interactions: {
+        Row: {
+          command: string | null
+          confidence: number | null
+          conversation_id: string
+          created_at: string | null
+          id: string
+          mode: string
+          response: string | null
+          user_id: string
+        }
+        Insert: {
+          command?: string | null
+          confidence?: number | null
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          mode: string
+          response?: string | null
+          user_id: string
+        }
+        Update: {
+          command?: string | null
+          confidence?: number | null
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          mode?: string
+          response?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_interactions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_interactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      bot_settings: {
+        Row: {
+          auto_translate: boolean | null
+          conversation_id: string
+          created_at: string | null
+          default_mode: string | null
+          enabled: boolean | null
+          id: string
+          moderation_enabled: boolean | null
+          persona: string | null
+          target_language: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auto_translate?: boolean | null
+          conversation_id: string
+          created_at?: string | null
+          default_mode?: string | null
+          enabled?: boolean | null
+          id?: string
+          moderation_enabled?: boolean | null
+          persona?: string | null
+          target_language?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auto_translate?: boolean | null
+          conversation_id?: string
+          created_at?: string | null
+          default_mode?: string | null
+          enabled?: boolean | null
+          id?: string
+          moderation_enabled?: boolean | null
+          persona?: string | null
+          target_language?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_settings_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_participants: {
         Row: {
           call_id: string

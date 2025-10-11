@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield } from "lucide-react";
+import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -11,8 +11,11 @@ import VoiceRecorder from "./VoiceRecorder";
 import MessageTranslator from "./MessageTranslator";
 import { CallInterface } from "./CallInterface";
 import { IncomingCallDialog } from "./IncomingCallDialog";
+import { GroupBotSettings } from "./GroupBotSettings";
+import { GroupBotInteraction } from "./GroupBotInteraction";
 import EmojiPicker, { EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 interface Message {
   id: string;
@@ -51,6 +54,10 @@ const ChatInterface = ({
   const [incomingCall, setIncomingCall] = useState<any>(null);
   const [callParticipants, setCallParticipants] = useState<Map<string, string>>(new Map());
   const [profilesCache, setProfilesCache] = useState<Map<string, string>>(new Map());
+  const [showBotSettings, setShowBotSettings] = useState(false);
+  const [showBotInteraction, setShowBotInteraction] = useState(false);
+  const [botSettings, setBotSettings] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -76,10 +83,37 @@ const ChatInterface = ({
   useEffect(() => {
     if (conversationId && currentUserId) {
       fetchMessages();
+      loadBotSettings();
+      checkIfAdmin();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
   }, [conversationId, currentUserId]);
+
+  const loadBotSettings = async () => {
+    if (!conversationId) return;
+    
+    const { data } = await supabase
+      .from('bot_settings')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .single();
+    
+    setBotSettings(data);
+  };
+
+  const checkIfAdmin = async () => {
+    if (!conversationId || !currentUserId) return;
+    
+    const { data } = await supabase
+      .from('conversation_participants')
+      .select('is_admin')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', currentUserId)
+      .single();
+    
+    setIsAdmin(data?.is_admin || false);
+  };
 
   // Subscribe to incoming calls
   useEffect(() => {
@@ -540,6 +574,32 @@ const ChatInterface = ({
           >
             <Video className="w-5 h-5" />
           </Button>
+          {isGroup && (
+            <Sheet open={showBotSettings} onOpenChange={setShowBotSettings}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hover:bg-primary/10"
+                >
+                  <Bot className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>GroupBotAI Settings</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6">
+                  {conversationId && (
+                    <GroupBotSettings
+                      conversationId={conversationId}
+                      isAdmin={isAdmin}
+                    />
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
           {conversationId && <ChatSummarizer conversationId={conversationId} />}
         </div>
 
@@ -580,6 +640,34 @@ const ChatInterface = ({
           onSelectSuggestion={handleAISuggestion}
           onClose={() => setShowAISuggestions(false)}
         />
+      )}
+
+      {/* GroupBotAI Interaction */}
+      {isGroup && showBotInteraction && conversationId && (
+        <div className="bg-card border-t border-border p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bot className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold">GroupBotAI</h3>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowBotInteraction(false)}
+            >
+              Close
+            </Button>
+          </div>
+          <GroupBotInteraction
+            conversationId={conversationId}
+            recentMessages={messages.slice(-20).map(msg => ({
+              sender_name: msg.senderName || contactName,
+              content: msg.text,
+              created_at: msg.timestamp.toISOString(),
+            }))}
+            botSettings={botSettings}
+          />
+        </div>
       )}
 
       {/* Input */}
@@ -629,6 +717,16 @@ const ChatInterface = ({
               >
                 <Sparkles className="w-4 h-4 text-primary" />
               </Button>
+              {isGroup && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-primary/10"
+                  onClick={() => setShowBotInteraction(!showBotInteraction)}
+                >
+                  <Bot className="w-4 h-4 text-primary" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
