@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+// Input validation constants
+const VALID_MODES = ['assistant', 'knowledge', 'moderator', 'persona', 'translation'] as const;
+const VALID_PERSONAS = ['professional', 'casual', 'friendly', 'technical', 'empathetic'] as const;
+const MAX_MESSAGE_LENGTH = 10000;
+const MAX_COMMAND_LENGTH = 500;
+const MAX_MESSAGES = 100;
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -16,8 +23,44 @@ serve(async (req) => {
     
     console.log('🤖 GroupBotAI request:', { conversationId, mode, persona, command, auto_translate, target_language, messageCount: messages?.length });
 
+    // Input validation
     if (!conversationId || !messages || !mode) {
-      throw new Error('Missing required fields: conversationId, messages, or mode');
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate mode
+    if (!VALID_MODES.includes(mode as any)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid mode' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate persona if provided
+    if (persona && !VALID_PERSONAS.includes(persona as any)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid persona' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate messages array
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid messages array' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate command length if provided
+    if (command && command.length > MAX_COMMAND_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: 'Command too long' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -29,17 +72,26 @@ serve(async (req) => {
     const systemPrompt = buildSystemPrompt(mode, persona, auto_translate, target_language);
     console.log('📝 Using mode:', mode, 'persona:', persona, 'auto_translate:', auto_translate);
 
-    // Format messages for AI
-    const formattedMessages = messages.map((msg: any) => ({
-      role: 'user',
-      content: `[${msg.sender_name} at ${new Date(msg.created_at).toLocaleTimeString()}]: ${msg.content}`
-    }));
+    // Format messages for AI with sanitization
+    const formattedMessages = messages.map((msg: any) => {
+      // Validate and truncate message content
+      const content = String(msg.content || '').slice(0, MAX_MESSAGE_LENGTH);
+      const senderName = String(msg.sender_name || 'User').replace(/[<>]/g, ''); // Remove potential HTML tags
+      const timestamp = new Date(msg.created_at).toLocaleTimeString();
+      
+      return {
+        role: 'user',
+        content: `[${senderName} at ${timestamp}]: ${content}`
+      };
+    });
 
     // Add command if present
     if (command) {
+      // Sanitize command input
+      const sanitizedCommand = String(command).slice(0, MAX_COMMAND_LENGTH).replace(/[<>]/g, '');
       formattedMessages.push({
         role: 'user',
-        content: `Command: ${command}`
+        content: `Command: ${sanitizedCommand}`
       });
     }
 

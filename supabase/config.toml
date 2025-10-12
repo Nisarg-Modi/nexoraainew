@@ -1,25 +1,25 @@
 project_id = "jtlnhmpxytlgljnuspan"
 
 [functions.generate-reply-suggestions]
-verify_jwt = false
+verify_jwt = true
 
 [functions.summarize-chat]
-verify_jwt = false
+verify_jwt = true
 
 [functions.transcribe-audio]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-embedding]
-verify_jwt = false
+verify_jwt = true
 
 [functions.semantic-search]
-verify_jwt = false
-
-[functions.translate-message]
 verify_jwt = true
 
 [functions.detect-language]
-verify_jwt = false
+verify_jwt = true
+
+[functions.translate-message]
+verify_jwt = true
 
 [functions.group-bot]
 verify_jwt = true
