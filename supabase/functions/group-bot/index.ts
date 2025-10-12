@@ -12,9 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { conversationId, messages, mode, persona, command } = await req.json();
+    const { conversationId, messages, mode, persona, command, auto_translate, target_language } = await req.json();
     
-    console.log('🤖 GroupBotAI request:', { conversationId, mode, persona, command, messageCount: messages?.length });
+    console.log('🤖 GroupBotAI request:', { conversationId, mode, persona, command, auto_translate, target_language, messageCount: messages?.length });
 
     if (!conversationId || !messages || !mode) {
       throw new Error('Missing required fields: conversationId, messages, or mode');
@@ -25,9 +25,9 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    // Build system prompt based on mode and persona
-    const systemPrompt = buildSystemPrompt(mode, persona);
-    console.log('📝 Using mode:', mode, 'persona:', persona);
+    // Build system prompt based on mode, persona, and auto_translate
+    const systemPrompt = buildSystemPrompt(mode, persona, auto_translate, target_language);
+    console.log('📝 Using mode:', mode, 'persona:', persona, 'auto_translate:', auto_translate);
 
     // Format messages for AI
     const formattedMessages = messages.map((msg: any) => ({
@@ -175,11 +175,15 @@ serve(async (req) => {
   }
 });
 
-function buildSystemPrompt(mode: string, persona: string): string {
+function buildSystemPrompt(mode: string, persona: string, auto_translate: boolean = false, target_language: string = 'en'): string {
+  const translationNote = auto_translate 
+    ? `\n\nAUTO-TRANSLATION ENABLED: If messages are in a language other than ${target_language}, automatically translate them to ${target_language} in your response. Mention the original language detected.`
+    : '';
+
   const basePrompt = `You are GroupBotAI, a helpful chatbot participant in group conversations. You analyze messages and respond naturally as a group member.
 
 Current mode: ${mode}
-Current persona: ${persona}
+Current persona: ${persona}${translationNote}
 
 Key behaviors:
 - Be concise and natural (1-3 sentences unless summarizing)

@@ -43,6 +43,8 @@ export const GroupBotInteraction = ({ conversationId, recentMessages, botSetting
           mode: botSettings?.default_mode || 'assistant',
           persona: botSettings?.persona || 'professional',
           command: cmdToUse,
+          auto_translate: botSettings?.auto_translate || false,
+          target_language: botSettings?.target_language || 'en',
         },
       });
 
