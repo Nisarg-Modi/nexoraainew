@@ -92,37 +92,7 @@ export const CallInterface = ({
     });
   };
 
-  const handleEndCall = async () => {
-    endCall();
-    
-    // Update call status
-    await supabase
-      .from('calls')
-      .update({ status: 'ended', ended_at: new Date().toISOString() })
-      .eq('id', callId);
-
-    // Update participant status
-    await supabase
-      .from('call_participants')
-      .update({ status: 'left', left_at: new Date().toISOString() })
-      .eq('call_id', callId)
-      .eq('user_id', userId);
-
-    onEndCall();
-  };
-
-  if (isConnecting) {
-    return (
-      <Card className="fixed inset-4 z-50 flex items-center justify-center bg-background/95 backdrop-blur">
-        <div className="text-center space-y-4">
-          <Phone className="w-16 h-16 animate-pulse mx-auto text-primary" />
-          <p className="text-lg">Connecting...</p>
-        </div>
-      </Card>
-    );
-  }
-
-  // Get the first remote participant for main view
+  // Get the first remote participant for main view - MUST be before any conditional returns
   const mainParticipant = Array.from(remoteStreams.entries())[0];
   const [mainVideoRef, setMainVideoRef] = useState<HTMLVideoElement | null>(null);
 
@@ -158,6 +128,36 @@ export const CallInterface = ({
         .catch(e => console.error('❌ Error playing main video:', e));
     }
   }, [mainVideoRef, mainParticipant]);
+
+  const handleEndCall = async () => {
+    endCall();
+    
+    // Update call status
+    await supabase
+      .from('calls')
+      .update({ status: 'ended', ended_at: new Date().toISOString() })
+      .eq('id', callId);
+
+    // Update participant status
+    await supabase
+      .from('call_participants')
+      .update({ status: 'left', left_at: new Date().toISOString() })
+      .eq('call_id', callId)
+      .eq('user_id', userId);
+
+    onEndCall();
+  };
+
+  if (isConnecting) {
+    return (
+      <Card className="fixed inset-4 z-50 flex items-center justify-center bg-background/95 backdrop-blur">
+        <div className="text-center space-y-4">
+          <Phone className="w-16 h-16 animate-pulse mx-auto text-primary" />
+          <p className="text-lg">Connecting...</p>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="fixed inset-4 z-50 flex flex-col bg-background/95 backdrop-blur">
