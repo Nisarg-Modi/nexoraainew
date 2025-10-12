@@ -120,11 +120,24 @@ export const CallInterface = ({
         }))
       });
       
+      // Ensure audio tracks are enabled
+      stream.getAudioTracks().forEach(track => {
+        if (!track.enabled) {
+          track.enabled = true;
+          console.log('🔊 Enabled audio track');
+        }
+      });
+      
       mainVideoRef.srcObject = stream;
-      mainVideoRef.muted = false; // Allow audio from remote participant
-      mainVideoRef.volume = 1.0; // Full volume
+      mainVideoRef.muted = false;
+      mainVideoRef.volume = 1.0;
+      
+      // Set audio attributes before playing
+      mainVideoRef.setAttribute('playsinline', 'true');
+      mainVideoRef.setAttribute('autoplay', 'true');
+      
       mainVideoRef.play()
-        .then(() => console.log('✅ Main video playing'))
+        .then(() => console.log('✅ Main video playing with audio'))
         .catch(e => console.error('❌ Error playing main video:', e));
     }
   }, [mainVideoRef, mainParticipant]);
@@ -170,7 +183,6 @@ export const CallInterface = ({
                 ref={setMainVideoRef}
                 autoPlay
                 playsInline
-                muted={false}
                 className="w-full h-full object-contain"
               />
             ) : (
@@ -227,11 +239,23 @@ export const CallInterface = ({
               useEffect(() => {
                 if (videoEl && stream) {
                   console.log('🎬 Setting thumbnail video for:', participantId);
+                  
+                  // Ensure audio tracks are enabled
+                  stream.getAudioTracks().forEach(track => {
+                    if (!track.enabled) {
+                      track.enabled = true;
+                      console.log('🔊 Enabled audio track for thumbnail');
+                    }
+                  });
+                  
                   videoEl.srcObject = stream;
-                  videoEl.muted = false; // Allow audio
+                  videoEl.muted = false;
                   videoEl.volume = 1.0;
+                  videoEl.setAttribute('playsinline', 'true');
+                  videoEl.setAttribute('autoplay', 'true');
+                  
                   videoEl.play()
-                    .then(() => console.log('✅ Thumbnail video playing'))
+                    .then(() => console.log('✅ Thumbnail video playing with audio'))
                     .catch(e => console.error('❌ Error playing thumbnail:', e));
                   remoteVideosRef.current.set(participantId, videoEl);
                 }
@@ -242,7 +266,6 @@ export const CallInterface = ({
                   ref={setVideoEl}
                   autoPlay
                   playsInline
-                  muted={false}
                   className="w-full h-full object-cover"
                 />
               );

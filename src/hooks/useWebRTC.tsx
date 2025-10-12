@@ -35,10 +35,19 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
         } : false,
         audio: {
           echoCancellation: true,
-          noiseSuppression: true
+          noiseSuppression: true,
+          autoGainControl: true
         },
       });
+      
       console.log('Got local stream with tracks:', stream.getTracks().map(t => `${t.kind} (${t.label})`));
+      
+      // Ensure audio tracks are enabled
+      stream.getAudioTracks().forEach(track => {
+        track.enabled = true;
+        console.log('🔊 Audio track enabled:', track.label);
+      });
+      
       setLocalStream(stream);
       return stream;
     } catch (error) {
