@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings } from "lucide-react";
+import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings, MoreVertical, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +16,8 @@ import { GroupBotInteraction } from "./GroupBotInteraction";
 import EmojiPicker, { EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface Message {
   id: string;
@@ -58,6 +60,7 @@ const ChatInterface = ({
   const [showBotInteraction, setShowBotInteraction] = useState(false);
   const [botSettings, setBotSettings] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -533,6 +536,34 @@ const ChatInterface = ({
     setCallParticipants(new Map());
   };
 
+  const handleLeaveConversation = async () => {
+    if (!conversationId || !currentUserId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('conversation_participants')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('user_id', currentUserId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Left conversation",
+        description: "You have successfully left this group.",
+      });
+      
+      onBack();
+    } catch (error) {
+      console.error('Error leaving conversation:', error);
+      toast({
+        title: "Failed to leave",
+        description: "Unable to leave the conversation. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <>
       <div className="min-h-screen bg-background flex flex-col">
@@ -601,6 +632,28 @@ const ChatInterface = ({
             </Sheet>
           )}
           {conversationId && <ChatSummarizer conversationId={conversationId} />}
+          {isGroup && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hover:bg-primary/10"
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={() => setShowLeaveDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Leave Conversation
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
       {/* Messages */}
@@ -778,6 +831,26 @@ const ChatInterface = ({
         onReject={rejectCall}
       />
     )}
+
+    <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Leave Conversation?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to leave "{contactName}"? You won't be able to see new messages and will need to be re-added by an admin to rejoin.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleLeaveConversation}
+            className="bg-destructive hover:bg-destructive/90"
+          >
+            Leave Conversation
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </>
   );
 };
