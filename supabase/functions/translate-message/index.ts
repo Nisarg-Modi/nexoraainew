@@ -1,5 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
+
+const VALID_LANGUAGES = [
+  'en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh', 
+  'ar', 'hi', 'ru', 'nl', 'pl', 'tr'
+] as const;
+
+const translateSchema = z.object({
+  text: z.string()
+    .min(1, 'Text cannot be empty')
+    .max(5000, 'Text too long (max 5000 characters)')
+    .transform(str => str.trim()),
+  targetLanguage: z.enum(VALID_LANGUAGES, {
+    errorMap: () => ({ message: 'Invalid target language' })
+  }),
+  messageId: z.string().uuid().optional()
+});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,11 +29,24 @@ serve(async (req) => {
   }
 
   try {
-    const { text, targetLanguage, messageId } = await req.json();
+    const body = await req.json();
     
-    if (!text || !targetLanguage) {
-      throw new Error('Text and target language are required');
+    // Validate input with Zod
+    const validationResult = translateSchema.safeParse(body);
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid input',
+          details: validationResult.error.errors.map(e => e.message).join(', ')
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
+    
+    const { text, targetLanguage, messageId } = validationResult.data;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -155,14 +185,20 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in translate-message:', error);
+    
+    // Return user-friendly error without exposing internal details
+    const errorMessage = error instanceof Error && error.message.includes('Unauthorized')
+      ? 'Authentication required'
+      : 'Unable to complete translation. Please try again.';
+    
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Translation failed',
+        error: errorMessage,
         translatedText: null
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
+        status: error instanceof Error && error.message.includes('Unauthorized') ? 401 : 500 
       }
     );
   }
