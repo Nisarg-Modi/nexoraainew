@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Sparkles, Globe, Zap, LogOut, MessageSquare, Search, Crown, FileText, User } from "lucide-react";
+import { Shield, Sparkles, Globe, Zap, LogOut, MessageSquare, Search, Crown, FileText, User, Calendar } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
 import ContactsList from "@/components/ContactsList";
 import SemanticSearch from "@/components/SemanticSearch";
@@ -14,12 +14,14 @@ import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { useSemanticSearch } from "@/hooks/useSemanticSearch";
 import nexoraLogo from "@/assets/nexora-logo.png";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
   const [selectedContact, setSelectedContact] = useState<{ userId: string; name: string; isGroup?: boolean; conversationId?: string } | null>(null);
   const { signOut, user } = useAuth();
   const { isAdmin } = useAdminCheck();
+  const navigate = useNavigate();
   
   // Initialize semantic search hook for real-time embedding generation
   useSemanticSearch();
@@ -74,10 +76,14 @@ const Index = () => {
         {/* Main Content with Tabs */}
         <div className="container mx-auto px-4 py-6">
           <Tabs defaultValue="contacts" className="w-full">
-            <TabsList className={`grid w-full mb-6 ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'}`}>
+            <TabsList className={`grid w-full mb-6 ${isAdmin ? 'grid-cols-7' : 'grid-cols-6'}`}>
               <TabsTrigger value="contacts" className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Contacts
+              </TabsTrigger>
+              <TabsTrigger value="meetings" className="flex items-center gap-2" onClick={() => navigate('/meetings')}>
+                <Calendar className="h-4 w-4" />
+                Meetings
               </TabsTrigger>
               <TabsTrigger value="profile" className="flex items-center gap-2">
                 <User className="h-4 w-4" />
