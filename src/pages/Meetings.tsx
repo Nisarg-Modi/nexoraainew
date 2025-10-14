@@ -43,20 +43,46 @@ const Meetings = () => {
 
   const fetchMeetings = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: meetingsData, error: meetingsError } = await supabase
         .from("meetings")
-        .select(`
-          *,
-          participants:meeting_participants(
-            user_id,
-            status,
-            profiles(display_name, avatar_url)
-          )
-        `)
+        .select("*")
         .order("scheduled_start", { ascending: true });
 
-      if (error) throw error;
-      setMeetings(data || []);
+      if (meetingsError) throw meetingsError;
+
+      // Fetch participants for each meeting separately
+      const meetingsWithParticipants = await Promise.all(
+        (meetingsData || []).map(async (meeting) => {
+          const { data: participants } = await supabase
+            .from("meeting_participants")
+            .select("user_id, status")
+            .eq("meeting_id", meeting.id);
+
+          // Fetch profiles for participants
+          const participantsWithProfiles = await Promise.all(
+            (participants || []).map(async (participant) => {
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("display_name, avatar_url")
+                .eq("user_id", participant.user_id)
+                .single();
+
+              return {
+                user_id: participant.user_id,
+                status: participant.status,
+                profiles: profile || { display_name: "Unknown", avatar_url: null },
+              };
+            })
+          );
+
+          return {
+            ...meeting,
+            participants: participantsWithProfiles,
+          };
+        })
+      );
+
+      setMeetings(meetingsWithParticipants);
     } catch (error) {
       console.error("Error fetching meetings:", error);
       toast({
