@@ -5,6 +5,8 @@ import { Card } from '@/components/ui/card';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import LiveTranscription from './LiveTranscription';
 
 interface CallInterfaceProps {
   callId: string;
@@ -13,6 +15,7 @@ interface CallInterfaceProps {
   participantNames: Map<string, string>;
   isVideo: boolean;
   onEndCall: () => void;
+  meetingId?: string;
 }
 
 export const CallInterface = ({
@@ -22,10 +25,13 @@ export const CallInterface = ({
   participantNames,
   isVideo,
   onEndCall,
+  meetingId,
 }: CallInterfaceProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [showTranscription, setShowTranscription] = useState(!!meetingId);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
@@ -174,41 +180,44 @@ export const CallInterface = ({
 
   return (
     <Card className="fixed inset-4 z-50 flex flex-col bg-background/95 backdrop-blur">
-      {/* Main Video Area */}
-      <div className="flex-1 p-4 flex items-center justify-center">
-        {mainParticipant ? (
-          <div className="relative w-full h-full rounded-lg overflow-hidden bg-muted">
-            {isVideo ? (
-              <video
-                ref={setMainVideoRef}
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain"
-              />
+      <div className="flex gap-4 h-full">
+        {/* Main Video/Call Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Main Video Area */}
+          <div className="flex-1 p-4 flex items-center justify-center">
+            {mainParticipant ? (
+              <div className="relative w-full h-full rounded-lg overflow-hidden bg-muted">
+                {isVideo ? (
+                  <video
+                    ref={setMainVideoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Users className="w-16 h-16 text-primary" />
+                    </div>
+                  </div>
+                )}
+                <div className="absolute bottom-4 left-4 bg-background/80 px-3 py-2 rounded text-base">
+                  {participantNames.get(mainParticipant[0]) || 'Participant'}
+                </div>
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Users className="w-16 h-16 text-primary" />
+                <div className="text-center space-y-4">
+                  <Phone className="w-16 h-16 animate-pulse mx-auto text-muted-foreground" />
+                  <p className="text-lg text-muted-foreground">Waiting for others to join...</p>
                 </div>
               </div>
             )}
-            <div className="absolute bottom-4 left-4 bg-background/80 px-3 py-2 rounded text-base">
-              {participantNames.get(mainParticipant[0]) || 'Participant'}
-            </div>
           </div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <Phone className="w-16 h-16 animate-pulse mx-auto text-muted-foreground" />
-              <p className="text-lg text-muted-foreground">Waiting for others to join...</p>
-            </div>
-          </div>
-        )}
-      </div>
 
-      {/* Thumbnail Strip */}
-      <div className="px-4 pb-4">
-        <div className="flex gap-2 overflow-x-auto pb-2">
+          {/* Thumbnail Strip */}
+          <div className="px-4 pb-4">
+            <div className="flex gap-2 overflow-x-auto pb-2">{/* ... keep existing code */}
           {/* Local Video Thumbnail */}
           <div className="relative flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-muted border-2 border-primary">
             {isVideo ? (
@@ -296,47 +305,62 @@ export const CallInterface = ({
                 <Phone className="w-6 h-6 animate-pulse text-muted-foreground" />
               </div>
             ))}
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="p-6 bg-background border-t">
+            <div className="flex items-center justify-center gap-4">
+              <Button
+                size="lg"
+                variant={isMuted ? 'destructive' : 'secondary'}
+                onClick={handleToggleMute}
+                className="rounded-full w-14 h-14"
+              >
+                {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+              </Button>
+
+              {isVideo && (
+                <Button
+                  size="lg"
+                  variant={isVideoOff ? 'destructive' : 'secondary'}
+                  onClick={handleToggleVideo}
+                  className="rounded-full w-14 h-14"
+                >
+                  {isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+                </Button>
+              )}
+
+              <Button
+                size="lg"
+                variant="destructive"
+                onClick={handleEndCall}
+                className="rounded-full w-14 h-14"
+              >
+                <PhoneOff className="w-6 h-6" />
+              </Button>
+            </div>
+
+            <div className="text-center mt-4">
+              <p className="text-sm text-muted-foreground">
+                {participantIds.length} participant{participantIds.length > 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Controls */}
-      <div className="p-6 bg-background border-t">
-        <div className="flex items-center justify-center gap-4">
-          <Button
-            size="lg"
-            variant={isMuted ? 'destructive' : 'secondary'}
-            onClick={handleToggleMute}
-            className="rounded-full w-14 h-14"
-          >
-            {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-          </Button>
-
-          {isVideo && (
-            <Button
-              size="lg"
-              variant={isVideoOff ? 'destructive' : 'secondary'}
-              onClick={handleToggleVideo}
-              className="rounded-full w-14 h-14"
-            >
-              {isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
-            </Button>
-          )}
-
-          <Button
-            size="lg"
-            variant="destructive"
-            onClick={handleEndCall}
-            className="rounded-full w-14 h-14"
-          >
-            <PhoneOff className="w-6 h-6" />
-          </Button>
-        </div>
-
-        <div className="text-center mt-4">
-          <p className="text-sm text-muted-foreground">
-            {participantIds.length} participant{participantIds.length > 1 ? 's' : ''}
-          </p>
-        </div>
+        {/* Live Transcription Sidebar */}
+        {showTranscription && meetingId && user && (
+          <div className="w-96 border-l p-4 overflow-hidden">
+            <LiveTranscription
+              meetingId={meetingId}
+              userId={userId}
+              userName={user.email || 'You'}
+              targetLanguage="en"
+              enabled={true}
+            />
+          </div>
+        )}
       </div>
     </Card>
   );

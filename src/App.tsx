@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Meetings from "./pages/Meetings";
+import MeetingDetails from "./pages/MeetingDetails";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <Meetings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meeting/:meetingId"
+            element={
+              <ProtectedRoute>
+                <MeetingDetails />
               </ProtectedRoute>
             }
           />

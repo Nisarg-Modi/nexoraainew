@@ -131,6 +131,10 @@ END:VCALENDAR`;
     navigate(`/meeting/${meetingId}`);
   };
 
+  const viewDetails = () => {
+    navigate(`/meeting/${meeting.id}`);
+  };
+
   return (
     <>
       <Card className={isPast ? "opacity-60" : ""}>
@@ -194,6 +198,11 @@ END:VCALENDAR`;
               <Button onClick={joinMeeting} className="flex-1">
                 <Video className="w-4 h-4 mr-2" />
                 Join
+              </Button>
+            )}
+            {isPast && (
+              <Button onClick={viewDetails} variant="outline" className="flex-1">
+                View Details
               </Button>
             )}
             <Button variant="outline" size="icon" onClick={copyMeetingLink}>

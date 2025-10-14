@@ -340,6 +340,44 @@ export type Database = {
           },
         ]
       }
+      meeting_transcripts: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          meeting_id: string
+          speaker_id: string
+          timestamp: string
+          translated_content: Json | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          meeting_id: string
+          speaker_id: string
+          timestamp?: string
+          translated_content?: Json | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          meeting_id?: string
+          speaker_id?: string
+          timestamp?: string
+          translated_content?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_transcripts_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meetings: {
         Row: {
           conversation_id: string | null
