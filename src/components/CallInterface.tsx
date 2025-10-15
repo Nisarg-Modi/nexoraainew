@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import LiveTranscription from './LiveTranscription';
+import { EmotionAnalytics } from './EmotionAnalytics';
 
 interface CallInterfaceProps {
   callId: string;
@@ -32,6 +33,7 @@ export const CallInterface = ({
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showTranscription, setShowTranscription] = useState(!!meetingId);
+  const [transcripts, setTranscripts] = useState<any[]>([]);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
@@ -60,6 +62,31 @@ export const CallInterface = ({
     console.log('Initializing call with participants:', participantIds);
     initializeCall(participantIds);
   }, []);
+
+  useEffect(() => {
+    if (!meetingId) return;
+
+    // Fetch transcripts initially
+    const fetchTranscripts = async () => {
+      const { data } = await supabase
+        .from('meeting_transcripts')
+        .select('*')
+        .eq('meeting_id', meetingId)
+        .order('timestamp', { ascending: false })
+        .limit(10);
+      
+      if (data) {
+        setTranscripts(data);
+      }
+    };
+
+    fetchTranscripts();
+
+    // Poll for new transcripts every 10 seconds
+    const interval = setInterval(fetchTranscripts, 10000);
+
+    return () => clearInterval(interval);
+  }, [meetingId]);
 
   useEffect(() => {
     if (localStream && localVideoRef.current) {
@@ -349,15 +376,19 @@ export const CallInterface = ({
           </div>
         </div>
 
-        {/* Live Transcription Sidebar */}
+        {/* Live Transcription & Analytics Sidebar */}
         {showTranscription && meetingId && user && (
-          <div className="w-96 border-l p-4 overflow-hidden">
+          <div className="w-96 border-l p-4 overflow-y-auto space-y-4">
             <LiveTranscription
               meetingId={meetingId}
               userId={userId}
               userName={user.email || 'You'}
               targetLanguage="en"
               enabled={true}
+            />
+            <EmotionAnalytics
+              meetingId={meetingId}
+              transcripts={transcripts}
             />
           </div>
         )}

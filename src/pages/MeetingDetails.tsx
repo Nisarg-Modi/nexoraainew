@@ -8,6 +8,7 @@ import { ArrowLeft, Calendar, Clock, Video, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import MeetingNotesSummary from "@/components/MeetingNotesSummary";
+import { CalendarSync } from "@/components/CalendarSync";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Meeting {
@@ -165,6 +166,16 @@ const MeetingDetails = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Calendar Sync */}
+        {meeting.status === 'scheduled' && (
+          <CalendarSync
+            meetingId={meeting.id}
+            meetingTitle={meeting.title}
+            scheduledStart={meeting.scheduled_start}
+            scheduledEnd={meeting.scheduled_end}
+          />
+        )}
 
         {/* Transcripts */}
         <Card>
