@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Meetings from "./pages/Meetings";
 import MeetingDetails from "./pages/MeetingDetails";
+import VoiceProfiles from "./pages/VoiceProfiles";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <MeetingDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/voice-profiles"
+            element={
+              <ProtectedRoute>
+                <VoiceProfiles />
               </ProtectedRoute>
             }
           />

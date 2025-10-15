@@ -143,6 +143,25 @@ const LiveTranscription = ({
     wsRef.current = null;
   };
 
+  const playVoiceTranslation = async (text: string, voiceId?: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('elevenlabs-tts', {
+        body: {
+          text,
+          voiceId: voiceId || '9BWtsMINqrJLrRacOk9x', // Default to Aria
+          modelId: 'eleven_turbo_v2_5'
+        }
+      });
+
+      if (error) throw error;
+
+      const audio = new Audio(`data:audio/mpeg;base64,${data.audioContent}`);
+      audio.play();
+    } catch (error) {
+      console.error('Error playing voice translation:', error);
+    }
+  };
+
   const handleNewTranscript = async (text: string) => {
     const newTranscript: Transcript = {
       id: crypto.randomUUID(),
@@ -171,6 +190,9 @@ const LiveTranscription = ({
           setTranscripts((prev) =>
             prev.map((t) => (t.id === newTranscript.id ? newTranscript : t))
           );
+
+          // Play translated audio with voice synthesis
+          await playVoiceTranslation(translatedText);
         }
       } catch (error) {
         console.error("Translation error:", error);
