@@ -81,11 +81,11 @@ const Index = () => {
                 <MessageSquare className="h-4 w-4" />
                 Contacts
               </TabsTrigger>
-              <TabsTrigger value="meetings" className="flex items-center gap-2" onClick={() => navigate('/meetings')}>
+              <TabsTrigger value="meetings" className="flex items-center justify-center gap-2" onClick={() => navigate('/meetings')}>
                 <Calendar className="h-4 w-4" />
                 Meetings
               </TabsTrigger>
-              <TabsTrigger value="voices" className="flex items-center gap-2" onClick={() => navigate('/voice-profiles')}>
+              <TabsTrigger value="voices" className="flex items-center justify-center gap-2" onClick={() => navigate('/voice-profiles')}>
                 <Mic className="h-4 w-4" />
                 Voices
               </TabsTrigger>
