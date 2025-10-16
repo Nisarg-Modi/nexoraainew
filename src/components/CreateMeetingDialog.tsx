@@ -14,8 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Video, VideoOff } from "lucide-react";
+import { Calendar, Video, VideoOff, X, Search } from "lucide-react";
 import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 interface CreateMeetingDialogProps {
   open: boolean;
@@ -38,6 +39,54 @@ const CreateMeetingDialog = ({
     scheduledEnd: "",
     isVideo: true,
   });
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{ user_id: string; display_name: string; email?: string }>>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<Array<{ user_id: string; display_name: string; email?: string }>>([]);
+  const [searching, setSearching] = useState(false);
+
+  const handleSearchParticipants = async () => {
+    if (!participantSearch.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      // Search by username or email
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, username")
+        .or(`username.ilike.%${participantSearch}%,display_name.ilike.%${participantSearch}%`)
+        .limit(5);
+
+      if (profileError) throw profileError;
+
+      // Get email addresses from auth.users (if available through RPC)
+      const results = profileData?.map(p => ({
+        user_id: p.user_id,
+        display_name: p.display_name,
+        email: p.username
+      })) || [];
+
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Error searching participants:", error);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const addParticipant = (participant: { user_id: string; display_name: string; email?: string }) => {
+    if (!selectedParticipants.find(p => p.user_id === participant.user_id)) {
+      setSelectedParticipants([...selectedParticipants, participant]);
+      setParticipantSearch("");
+      setSearchResults([]);
+    }
+  };
+
+  const removeParticipant = (userId: string) => {
+    setSelectedParticipants(selectedParticipants.filter(p => p.user_id !== userId));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +98,7 @@ const CreateMeetingDialog = ({
       const meetingId = crypto.randomUUID();
       const meetingLink = `${window.location.origin}/meeting/${meetingId}`;
 
-      const { error } = await supabase.from("meetings").insert({
+      const { data: meeting, error } = await supabase.from("meetings").insert({
         title: formData.title,
         description: formData.description || null,
         scheduled_start: formData.scheduledStart,
@@ -58,9 +107,24 @@ const CreateMeetingDialog = ({
         created_by: user.id,
         is_video: formData.isVideo,
         status: "scheduled",
-      });
+      }).select().single();
 
       if (error) throw error;
+
+      // Add participants to meeting_participants table
+      if (selectedParticipants.length > 0 && meeting) {
+        const participantInserts = selectedParticipants.map(p => ({
+          meeting_id: meeting.id,
+          user_id: p.user_id,
+          status: 'invited'
+        }));
+
+        const { error: participantError } = await supabase
+          .from("meeting_participants")
+          .insert(participantInserts);
+
+        if (participantError) throw participantError;
+      }
 
       toast({
         title: "Meeting Created",
@@ -74,6 +138,7 @@ const CreateMeetingDialog = ({
         scheduledEnd: "",
         isVideo: true,
       });
+      setSelectedParticipants([]);
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -154,6 +219,69 @@ const CreateMeetingDialog = ({
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Participants (Optional)</Label>
+            <div className="relative">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Search by username or email..."
+                  value={participantSearch}
+                  onChange={(e) => setParticipantSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearchParticipants();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleSearchParticipants}
+                  disabled={searching}
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {searchResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.user_id}
+                      type="button"
+                      className="w-full px-3 py-2 text-left hover:bg-accent transition-colors"
+                      onClick={() => addParticipant(result)}
+                    >
+                      <div className="font-medium">{result.display_name}</div>
+                      {result.email && (
+                        <div className="text-sm text-muted-foreground">{result.email}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {selectedParticipants.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {selectedParticipants.map((participant) => (
+                  <Badge key={participant.user_id} variant="secondary" className="gap-1">
+                    {participant.display_name}
+                    <button
+                      type="button"
+                      onClick={() => removeParticipant(participant.user_id)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
