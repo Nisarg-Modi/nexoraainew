@@ -916,6 +916,14 @@ export type Database = {
         Args: { identifier_text: string; was_successful: boolean }
         Returns: undefined
       }
+      search_users_for_meeting: {
+        Args: { search_term: string }
+        Returns: {
+          display_name: string
+          user_id: string
+          username: string
+        }[]
+      }
       semantic_search: {
         Args: {
           conversation_filter?: string

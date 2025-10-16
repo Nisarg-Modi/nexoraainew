@@ -52,16 +52,12 @@ const CreateMeetingDialog = ({
 
     setSearching(true);
     try {
-      // Search by username or email
+      // Use the security definer function to search all users
       const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("user_id, display_name, username")
-        .or(`username.ilike.%${participantSearch}%,display_name.ilike.%${participantSearch}%`)
-        .limit(5);
+        .rpc('search_users_for_meeting', { search_term: participantSearch });
 
       if (profileError) throw profileError;
 
-      // Get email addresses from auth.users (if available through RPC)
       const results = profileData?.map(p => ({
         user_id: p.user_id,
         display_name: p.display_name,
@@ -71,6 +67,11 @@ const CreateMeetingDialog = ({
       setSearchResults(results);
     } catch (error) {
       console.error("Error searching participants:", error);
+      toast({
+        title: "Search Error",
+        description: "Failed to search for participants. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setSearching(false);
     }
