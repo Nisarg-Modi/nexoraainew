@@ -92,6 +92,15 @@ const CreateMeetingDialog = ({
     e.preventDefault();
     if (!user) return;
 
+    if (selectedParticipants.length === 0) {
+      toast({
+        title: "Participants Required",
+        description: "Please add at least one participant to the meeting",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // Generate unique meeting link
@@ -112,7 +121,7 @@ const CreateMeetingDialog = ({
       if (error) throw error;
 
       // Add participants to meeting_participants table
-      if (selectedParticipants.length > 0 && meeting) {
+      if (meeting) {
         const participantInserts = selectedParticipants.map(p => ({
           meeting_id: meeting.id,
           user_id: p.user_id,
@@ -128,7 +137,7 @@ const CreateMeetingDialog = ({
 
       toast({
         title: "Meeting Created",
-        description: "Your meeting has been scheduled successfully",
+        description: `Meeting scheduled with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''}`,
       });
 
       setFormData({
@@ -222,7 +231,7 @@ const CreateMeetingDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Participants (Optional)</Label>
+            <Label>Participants *</Label>
             <div className="relative">
               <div className="flex gap-2">
                 <Input
