@@ -14,14 +14,14 @@ import { useAdminCheck } from "@/hooks/useAdminCheck";
 import { useSemanticSearch } from "@/hooks/useSemanticSearch";
 import nexoraLogo from "@/assets/nexora-logo.png";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
-import { useNavigate } from "react-router-dom";
+import { VoiceProfileManager } from '@/components/VoiceProfileManager';
+import Meetings from '@/pages/Meetings';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
   const [selectedContact, setSelectedContact] = useState<{ userId: string; name: string; isGroup?: boolean; conversationId?: string } | null>(null);
   const { signOut, user } = useAuth();
   const { isAdmin } = useAdminCheck();
-  const navigate = useNavigate();
   
   // Initialize semantic search hook for real-time embedding generation
   useSemanticSearch();
@@ -81,11 +81,11 @@ const Index = () => {
                 <MessageSquare className="h-4 w-4" />
                 Contacts
               </TabsTrigger>
-              <TabsTrigger value="meetings" className="flex items-center justify-center gap-2" onClick={() => navigate('/meetings')}>
+              <TabsTrigger value="meetings" className="flex items-center justify-center gap-2">
                 <Calendar className="h-4 w-4" />
                 Meetings
               </TabsTrigger>
-              <TabsTrigger value="voices" className="flex items-center justify-center gap-2" onClick={() => navigate('/voice-profiles')}>
+              <TabsTrigger value="voices" className="flex items-center justify-center gap-2">
                 <Mic className="h-4 w-4" />
                 Voices
               </TabsTrigger>
@@ -118,6 +118,14 @@ const Index = () => {
                 onStartChat={handleStartChat}
                 onStartGroupChat={handleStartGroupChat}
               />
+            </TabsContent>
+            
+            <TabsContent value="meetings">
+              <Meetings />
+            </TabsContent>
+            
+            <TabsContent value="voices">
+              <VoiceProfileManager />
             </TabsContent>
             
             <TabsContent value="profile">
