@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -125,8 +125,12 @@ export const CallInterface = ({
     });
   };
 
-  // Get the first remote participant for main view - MUST be before any conditional returns
-  const mainParticipant = Array.from(remoteStreams.entries())[0];
+  // Get the first remote participant for main view - memoized to prevent unnecessary re-renders
+  const mainParticipant = useMemo(() => {
+    const entries = Array.from(remoteStreams.entries());
+    return entries.length > 0 ? entries[0] : null;
+  }, [remoteStreams]);
+  
   const mainVideoRef = useRef<HTMLVideoElement>(null);
 
   // Log remote streams changes
@@ -171,17 +175,8 @@ export const CallInterface = ({
     videoEl.muted = false;
     videoEl.volume = 1.0;
     
-    const playPromise = videoEl.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => console.log('✅ Main video playing with audio'))
-        .catch(e => {
-          // Only log if it's not an abort error (which happens during cleanup)
-          if (e.name !== 'AbortError') {
-            console.error('❌ Error playing main video:', e);
-          }
-        });
-    }
+    // Important: Let browser autoplay handle it, don't call play() manually
+    console.log('✅ Main video stream attached, autoplay will handle playback');
   }, [mainParticipant]);
 
   const handleEndCall = async () => {
