@@ -117,9 +117,10 @@ const CreateMeetingDialog = ({
         created_by: user.id,
         is_video: formData.isVideo,
         status: "scheduled",
-      }).select().single();
+      }).select().maybeSingle();
 
       if (error) throw error;
+      if (!meeting) throw new Error("Failed to create meeting");
 
       // Add participants to meeting_participants table
       if (meeting) {

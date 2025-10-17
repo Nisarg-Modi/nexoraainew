@@ -65,7 +65,7 @@ const Meetings = () => {
                 .from("profiles")
                 .select("display_name, avatar_url")
                 .eq("user_id", participant.user_id)
-                .single();
+                .maybeSingle();
 
               return {
                 user_id: participant.user_id,
