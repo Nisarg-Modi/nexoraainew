@@ -127,7 +127,7 @@ export const CallInterface = ({
 
   // Get the first remote participant for main view - MUST be before any conditional returns
   const mainParticipant = Array.from(remoteStreams.entries())[0];
-  const [mainVideoRef, setMainVideoRef] = useState<HTMLVideoElement | null>(null);
+  const mainVideoRef = useRef<HTMLVideoElement>(null);
 
   // Log remote streams changes
   useEffect(() => {
@@ -139,41 +139,50 @@ export const CallInterface = ({
 
   // Set up main video when participant or stream changes
   useEffect(() => {
-    if (mainVideoRef && mainParticipant?.[1]) {
-      const [participantId, stream] = mainParticipant;
-      console.log('🎬 Setting main video for participant:', participantId);
-      console.log('📊 Main stream state:', {
-        id: stream.id,
-        active: stream.active,
-        tracks: stream.getTracks().map(t => ({
-          kind: t.kind,
-          enabled: t.enabled,
-          readyState: t.readyState,
-          muted: t.muted
-        }))
-      });
-      
-      // Ensure audio tracks are enabled
-      stream.getAudioTracks().forEach(track => {
-        if (!track.enabled) {
-          track.enabled = true;
-          console.log('🔊 Enabled audio track');
-        }
-      });
-      
-      mainVideoRef.srcObject = stream;
-      mainVideoRef.muted = false;
-      mainVideoRef.volume = 1.0;
-      
-      // Set audio attributes before playing
-      mainVideoRef.setAttribute('playsinline', 'true');
-      mainVideoRef.setAttribute('autoplay', 'true');
-      
-      mainVideoRef.play()
+    const videoEl = mainVideoRef.current;
+    if (!videoEl || !mainParticipant?.[1]) return;
+
+    const [participantId, stream] = mainParticipant;
+    
+    // Only update if stream has changed
+    if (videoEl.srcObject === stream) return;
+    
+    console.log('🎬 Setting main video for participant:', participantId);
+    console.log('📊 Main stream state:', {
+      id: stream.id,
+      active: stream.active,
+      tracks: stream.getTracks().map(t => ({
+        kind: t.kind,
+        enabled: t.enabled,
+        readyState: t.readyState,
+        muted: t.muted
+      }))
+    });
+    
+    // Ensure all tracks are enabled
+    stream.getTracks().forEach(track => {
+      if (!track.enabled) {
+        track.enabled = true;
+        console.log(`🔊 Enabled ${track.kind} track`);
+      }
+    });
+    
+    videoEl.srcObject = stream;
+    videoEl.muted = false;
+    videoEl.volume = 1.0;
+    
+    const playPromise = videoEl.play();
+    if (playPromise !== undefined) {
+      playPromise
         .then(() => console.log('✅ Main video playing with audio'))
-        .catch(e => console.error('❌ Error playing main video:', e));
+        .catch(e => {
+          // Only log if it's not an abort error (which happens during cleanup)
+          if (e.name !== 'AbortError') {
+            console.error('❌ Error playing main video:', e);
+          }
+        });
     }
-  }, [mainVideoRef, mainParticipant]);
+  }, [mainParticipant]);
 
   const handleEndCall = async () => {
     endCall();
@@ -216,7 +225,7 @@ export const CallInterface = ({
               <div className="relative w-full h-full rounded-lg overflow-hidden bg-muted">
                 {isVideo ? (
                   <video
-                    ref={setMainVideoRef}
+                    ref={mainVideoRef}
                     autoPlay
                     playsInline
                     className="w-full h-full object-contain"
@@ -268,62 +277,51 @@ export const CallInterface = ({
           </div>
 
           {/* Other Remote Video Thumbnails */}
-          {Array.from(remoteStreams.entries()).slice(1).map(([participantId, stream]) => {
-            const ThumbnailVideo = () => {
-              const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
-              
-              useEffect(() => {
-                if (videoEl && stream) {
-                  console.log('🎬 Setting thumbnail video for:', participantId);
-                  
-                  // Ensure audio tracks are enabled
-                  stream.getAudioTracks().forEach(track => {
-                    if (!track.enabled) {
-                      track.enabled = true;
-                      console.log('🔊 Enabled audio track for thumbnail');
-                    }
-                  });
-                  
-                  videoEl.srcObject = stream;
-                  videoEl.muted = false;
-                  videoEl.volume = 1.0;
-                  videoEl.setAttribute('playsinline', 'true');
-                  videoEl.setAttribute('autoplay', 'true');
-                  
-                  videoEl.play()
-                    .then(() => console.log('✅ Thumbnail video playing with audio'))
-                    .catch(e => console.error('❌ Error playing thumbnail:', e));
-                  remoteVideosRef.current.set(participantId, videoEl);
-                }
-              }, [videoEl, stream]);
-
-              return (
+          {Array.from(remoteStreams.entries()).slice(1).map(([participantId, stream]) => (
+            <div key={participantId} className="relative flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-muted">
+              {isVideo ? (
                 <video
-                  ref={setVideoEl}
+                  ref={(el) => {
+                    if (el && el.srcObject !== stream) {
+                      console.log('🎬 Setting thumbnail video for:', participantId);
+                      
+                      // Ensure all tracks are enabled
+                      stream.getTracks().forEach(track => {
+                        if (!track.enabled) {
+                          track.enabled = true;
+                          console.log(`🔊 Enabled ${track.kind} track for thumbnail`);
+                        }
+                      });
+                      
+                      el.srcObject = stream;
+                      el.muted = false;
+                      el.volume = 1.0;
+                      
+                      el.play()
+                        .then(() => console.log('✅ Thumbnail video playing'))
+                        .catch(e => {
+                          if (e.name !== 'AbortError') {
+                            console.error('❌ Error playing thumbnail:', e);
+                          }
+                        });
+                    }
+                  }}
                   autoPlay
                   playsInline
                   className="w-full h-full object-cover"
                 />
-              );
-            };
-
-            return (
-              <div key={participantId} className="relative flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden bg-muted">
-                {isVideo ? (
-                  <ThumbnailVideo />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Users className="w-6 h-6 text-primary" />
-                    </div>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Users className="w-6 h-6 text-primary" />
                   </div>
-                )}
-                <div className="absolute bottom-1 left-1 bg-background/80 px-2 py-0.5 rounded text-xs">
-                  {participantNames.get(participantId) || 'Unknown'}
                 </div>
+              )}
+              <div className="absolute bottom-1 left-1 bg-background/80 px-2 py-0.5 rounded text-xs">
+                {participantNames.get(participantId) || 'Unknown'}
               </div>
-            );
-          })}
+            </div>
+          ))}
 
           {/* Empty slots for participants not yet connected */}
           {participantIds.length - remoteStreams.size - 1 > 0 &&
