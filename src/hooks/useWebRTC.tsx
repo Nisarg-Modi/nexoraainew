@@ -82,6 +82,15 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
         muted: event.track.muted
       });
       
+      // Listen for unmute event (when audio data starts flowing)
+      event.track.onunmute = () => {
+        console.log(`🔊 Track unmuted and audio data flowing:`, event.track.kind);
+      };
+      
+      event.track.onended = () => {
+        console.log(`🛑 Track ended:`, event.track.kind);
+      };
+      
       if (event.streams && event.streams[0]) {
         const remoteStream = event.streams[0];
         console.log('📺 Remote stream details:', {
@@ -96,14 +105,14 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
           }))
         });
         
-        // Ensure all tracks are enabled and not muted
+        // Ensure all tracks are enabled
         remoteStream.getTracks().forEach(track => {
           if (!track.enabled) {
             console.warn('⚠️ Track was disabled, enabling:', track.kind);
             track.enabled = true;
           }
           if (track.muted) {
-            console.warn('⚠️ Track is muted:', track.kind);
+            console.log('⏳ Track is muted (waiting for data):', track.kind);
           }
         });
         
@@ -147,6 +156,16 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
         pc.restartIce();
       } else if (pc.iceConnectionState === 'connected') {
         console.log('✅ ICE connection established');
+        // Log track states after ICE connects
+        pc.getReceivers().forEach(receiver => {
+          if (receiver.track) {
+            console.log(`📊 After ICE connect - ${receiver.track.kind} track:`, {
+              enabled: receiver.track.enabled,
+              muted: receiver.track.muted,
+              readyState: receiver.track.readyState
+            });
+          }
+        });
       }
     };
 

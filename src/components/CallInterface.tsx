@@ -164,6 +164,18 @@ export const CallInterface = ({
         track.enabled = true;
         console.log(`🔊 Enabled ${track.kind} track`);
       }
+      
+      // Listen for unmute event on tracks
+      track.onunmute = () => {
+        console.log(`🎵 Track unmuted - audio should start flowing:`, track.kind);
+        // Retry playing audio when track unmutes
+        if (!isVideo && mainVideoRef.current) {
+          const audioEl = mainVideoRef.current as HTMLAudioElement;
+          audioEl.play()
+            .then(() => console.log('✅ Audio playing after unmute'))
+            .catch(e => console.error('❌ Error playing audio after unmute:', e));
+        }
+      };
     });
     
     if (isVideo) {
@@ -182,8 +194,10 @@ export const CallInterface = ({
         audioEl.srcObject = stream;
         audioEl.muted = false;
         audioEl.volume = 1.0;
+        
+        console.log('🔊 Attempting to play audio...');
         audioEl.play()
-          .then(() => console.log('✅ Audio playing'))
+          .then(() => console.log('✅ Audio element playing'))
           .catch(e => console.error('❌ Error playing audio:', e));
       }
     }
