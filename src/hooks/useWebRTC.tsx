@@ -243,6 +243,12 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
     try {
       const pc = peerConnections.current.get(from);
       if (pc) {
+        // Check if we can set remote description (prevent duplicates)
+        if (pc.signalingState !== 'have-local-offer') {
+          console.log('⚠️ Ignoring duplicate answer from:', from, 'state:', pc.signalingState);
+          return;
+        }
+        
         console.log('Setting remote answer from:', from);
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
         

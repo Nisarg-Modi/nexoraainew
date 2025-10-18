@@ -140,17 +140,13 @@ export const CallInterface = ({
     });
   }, [remoteStreams]);
 
-  // Set up main video when participant or stream changes
+  // Set up main video/audio when participant or stream changes
   useEffect(() => {
-    const videoEl = mainVideoRef.current;
-    if (!videoEl || !mainParticipant?.[1]) return;
+    if (!mainParticipant?.[1]) return;
 
     const [participantId, stream] = mainParticipant;
     
-    // Only update if stream has changed
-    if (videoEl.srcObject === stream) return;
-    
-    console.log('🎬 Setting main video for participant:', participantId);
+    console.log('🎬 Setting main media for participant:', participantId);
     console.log('📊 Main stream state:', {
       id: stream.id,
       active: stream.active,
@@ -170,13 +166,28 @@ export const CallInterface = ({
       }
     });
     
-    videoEl.srcObject = stream;
-    videoEl.muted = false;
-    videoEl.volume = 1.0;
-    
-    // Important: Let browser autoplay handle it, don't call play() manually
-    console.log('✅ Main video stream attached, autoplay will handle playback');
-  }, [mainParticipant]);
+    if (isVideo) {
+      // For video calls, use video element
+      const videoEl = mainVideoRef.current;
+      if (videoEl && videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+        videoEl.muted = false;
+        videoEl.volume = 1.0;
+        console.log('✅ Main video stream attached, autoplay will handle playback');
+      }
+    } else {
+      // For audio-only calls, create/update audio element
+      const audioEl = mainVideoRef.current as HTMLAudioElement;
+      if (audioEl && audioEl.srcObject !== stream) {
+        audioEl.srcObject = stream;
+        audioEl.muted = false;
+        audioEl.volume = 1.0;
+        audioEl.play()
+          .then(() => console.log('✅ Audio playing'))
+          .catch(e => console.error('❌ Error playing audio:', e));
+      }
+    }
+  }, [mainParticipant, isVideo]);
 
   const handleEndCall = async () => {
     endCall();
@@ -225,11 +236,19 @@ export const CallInterface = ({
                     className="w-full h-full object-contain"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Users className="w-16 h-16 text-primary" />
+                  <>
+                    <audio
+                      ref={mainVideoRef as any}
+                      autoPlay
+                      playsInline
+                      className="hidden"
+                    />
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center">
+                        <Users className="w-16 h-16 text-primary" />
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
                 <div className="absolute bottom-4 left-4 bg-background/80 px-3 py-2 rounded text-base">
                   {participantNames.get(mainParticipant[0]) || 'Participant'}
