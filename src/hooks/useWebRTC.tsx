@@ -13,6 +13,7 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [isConnecting, setIsConnecting] = useState(false);
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const pendingIceCandidates = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const channelRef = useRef<any>(null);
 
   const configuration: RTCConfiguration = {
@@ -207,6 +208,16 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       console.log('Remote description set for:', from);
       
+      // Process any pending ICE candidates
+      const pending = pendingIceCandidates.current.get(from);
+      if (pending && pending.length > 0) {
+        console.log(`Processing ${pending.length} pending ICE candidates for:`, from);
+        for (const candidate of pending) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+        pendingIceCandidates.current.delete(from);
+      }
+      
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log('Sending answer to:', from);
@@ -234,6 +245,16 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
       if (pc) {
         console.log('Setting remote answer from:', from);
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        
+        // Process any pending ICE candidates
+        const pending = pendingIceCandidates.current.get(from);
+        if (pending && pending.length > 0) {
+          console.log(`Processing ${pending.length} pending ICE candidates for:`, from);
+          for (const candidate of pending) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+          pendingIceCandidates.current.delete(from);
+        }
       } else {
         console.error('No peer connection found for:', from);
       }
@@ -248,8 +269,14 @@ export const useWebRTC = ({ callId, userId, isVideo, onRemoteStream }: WebRTCCon
       if (pc && pc.remoteDescription) {
         console.log('Adding ICE candidate from:', from);
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } else if (pc) {
+        // Queue ICE candidate until remote description is set
+        console.log('Queueing ICE candidate from:', from);
+        const pending = pendingIceCandidates.current.get(from) || [];
+        pending.push(candidate);
+        pendingIceCandidates.current.set(from, pending);
       } else {
-        console.warn('Cannot add ICE candidate - no peer connection or remote description for:', from);
+        console.warn('No peer connection found for ICE candidate from:', from);
       }
     } catch (error) {
       console.error('Error adding ICE candidate:', error);

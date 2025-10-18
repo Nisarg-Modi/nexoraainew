@@ -103,9 +103,8 @@ export const CallInterface = ({
       
       localVideoRef.current.srcObject = localStream;
       localVideoRef.current.muted = true; // Always mute own video
-      localVideoRef.current.play()
-        .then(() => console.log('✅ Local video playing'))
-        .catch(e => console.error('❌ Error playing local video:', e));
+      // Let autoplay handle playback
+      console.log('✅ Local stream attached, autoplay enabled');
     }
   }, [localStream]);
 
@@ -292,13 +291,8 @@ export const CallInterface = ({
                       el.muted = false;
                       el.volume = 1.0;
                       
-                      el.play()
-                        .then(() => console.log('✅ Thumbnail video playing'))
-                        .catch(e => {
-                          if (e.name !== 'AbortError') {
-                            console.error('❌ Error playing thumbnail:', e);
-                          }
-                        });
+                      // Let autoplay handle playback
+                      console.log('✅ Thumbnail stream attached, autoplay enabled');
                     }
                   }}
                   autoPlay
