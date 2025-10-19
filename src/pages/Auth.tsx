@@ -18,7 +18,7 @@ const loginSchema = z.object({
 
 const signupSchema = z.object({
   username: z.string().trim().min(3, "Username must be at least 3 characters").max(30, "Username too long").regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
-  email: z.string().email("Invalid email address").max(255, "Email too long").optional().or(z.literal("")),
+  email: z.string().trim().email("Invalid email address").max(255, "Email too long"),
   password: z.string().min(8, "Password must be at least 8 characters").max(100, "Password too long"),
   displayName: z.string().trim().min(2, "Display name must be at least 2 characters").max(50, "Display name too long"),
   phoneNumber: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format (use E.164 format: +1234567890)").optional().or(z.literal("")),
@@ -166,11 +166,8 @@ const Auth = () => {
         
         const redirectUrl = `${window.location.origin}/`;
         
-        // Generate email if not provided (required by Supabase Auth)
-        const userEmail = email.trim() || `${username.trim()}@nexora.internal`;
-        
         const { data: authData, error } = await supabase.auth.signUp({
-          email: userEmail,
+          email: email.trim(),
           password,
           options: {
             emailRedirectTo: redirectUrl,
@@ -290,19 +287,17 @@ const Auth = () => {
           {!isLogin && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="email">Email (optional)</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@example.com (optional)"
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
                   className="bg-muted border-border"
                   maxLength={255}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Email is optional - if not provided, a placeholder will be used
-                </p>
               </div>
               
               <div className="space-y-2">
