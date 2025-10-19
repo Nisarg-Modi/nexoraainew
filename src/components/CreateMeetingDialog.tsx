@@ -43,6 +43,8 @@ const CreateMeetingDialog = ({
   const [searchResults, setSearchResults] = useState<Array<{ user_id: string; display_name: string; email?: string }>>([]);
   const [selectedParticipants, setSelectedParticipants] = useState<Array<{ user_id: string; display_name: string; email?: string }>>([]);
   const [searching, setSearching] = useState(false);
+  const [syncToCalendar, setSyncToCalendar] = useState(true);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
 
   const handleSearchParticipants = async () => {
     if (!participantSearch.trim()) {
@@ -89,6 +91,33 @@ const CreateMeetingDialog = ({
     setSelectedParticipants(selectedParticipants.filter(p => p.user_id !== userId));
   };
 
+  const handleGoogleAuth = () => {
+    const clientId = ''; // Users configure via Google Cloud Console
+    const redirectUri = `${window.location.origin}`;
+    const scope = 'https://www.googleapis.com/auth/calendar.events';
+    
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${clientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=token&` +
+      `scope=${encodeURIComponent(scope)}`;
+    
+    window.open(authUrl, 'Google Calendar Auth', 'width=600,height=600');
+    
+    const messageHandler = (event: MessageEvent) => {
+      if (event.data.type === 'google-auth') {
+        setGoogleToken(event.data.token);
+        toast({
+          title: 'Connected',
+          description: 'Google Calendar connected successfully',
+        });
+        window.removeEventListener('message', messageHandler);
+      }
+    };
+    
+    window.addEventListener('message', messageHandler);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -123,24 +152,51 @@ const CreateMeetingDialog = ({
       if (!meeting) throw new Error("Failed to create meeting");
 
       // Add participants to meeting_participants table
-      if (meeting) {
-        const participantInserts = selectedParticipants.map(p => ({
-          meeting_id: meeting.id,
-          user_id: p.user_id,
-          status: 'invited'
-        }));
+      const participantInserts = selectedParticipants.map(p => ({
+        meeting_id: meeting.id,
+        user_id: p.user_id,
+        status: 'invited'
+      }));
 
-        const { error: participantError } = await supabase
-          .from("meeting_participants")
-          .insert(participantInserts);
+      const { error: participantError } = await supabase
+        .from("meeting_participants")
+        .insert(participantInserts);
 
-        if (participantError) throw participantError;
+      if (participantError) throw participantError;
+
+      // Sync to Google Calendar if enabled
+      if (syncToCalendar && googleToken) {
+        try {
+          const { error: syncError } = await supabase.functions.invoke('calendar-sync', {
+            body: {
+              action: 'create-event',
+              meetingId: meeting.id,
+              calendarType: 'google',
+              accessToken: googleToken,
+            },
+          });
+
+          if (syncError) {
+            console.error('Calendar sync error:', syncError);
+            toast({
+              title: "Meeting Created",
+              description: "Meeting created but failed to sync with Google Calendar",
+            });
+          } else {
+            toast({
+              title: "Meeting Created & Synced",
+              description: `Meeting scheduled and added to Google Calendar with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''}`,
+            });
+          }
+        } catch (syncError) {
+          console.error('Calendar sync failed:', syncError);
+        }
+      } else {
+        toast({
+          title: "Meeting Created",
+          description: `Meeting scheduled with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''}`,
+        });
       }
-
-      toast({
-        title: "Meeting Created",
-        description: `Meeting scheduled with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''}`,
-      });
 
       setFormData({
         title: "",
@@ -150,6 +206,7 @@ const CreateMeetingDialog = ({
         isVideo: true,
       });
       setSelectedParticipants([]);
+      setSyncToCalendar(true);
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -315,6 +372,40 @@ const CreateMeetingDialog = ({
                 setFormData({ ...formData, isVideo: checked })
               }
             />
+          </div>
+
+          <div className="space-y-3 p-4 bg-muted rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-primary" />
+                <div>
+                  <p className="font-medium">Google Calendar Sync</p>
+                  <p className="text-sm text-muted-foreground">
+                    {googleToken ? "Connected" : "Add to calendar after creation"}
+                  </p>
+                </div>
+              </div>
+              {!googleToken ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGoogleAuth}
+                >
+                  Connect
+                </Button>
+              ) : (
+                <Switch
+                  checked={syncToCalendar}
+                  onCheckedChange={setSyncToCalendar}
+                />
+              )}
+            </div>
+            {!googleToken && (
+              <p className="text-xs text-muted-foreground">
+                Connect Google Calendar to automatically send invites to all participants
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
