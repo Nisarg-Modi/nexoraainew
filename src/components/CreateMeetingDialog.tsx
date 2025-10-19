@@ -92,7 +92,17 @@ const CreateMeetingDialog = ({
   };
 
   const handleGoogleAuth = () => {
-    const clientId = ''; // Users configure via Google Cloud Console
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+    
+    if (!clientId) {
+      toast({
+        title: "Configuration Required",
+        description: "Please add VITE_GOOGLE_CLIENT_ID to your environment variables",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const redirectUri = `${window.location.origin}`;
     const scope = 'https://www.googleapis.com/auth/calendar.events';
     
