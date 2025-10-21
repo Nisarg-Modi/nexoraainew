@@ -103,16 +103,34 @@ const CreateMeetingDialog = ({
       return;
     }
     
-    const redirectUri = `${window.location.origin}`;
+    const redirectUri = `${window.location.origin}/`;
     const scope = 'https://www.googleapis.com/auth/calendar.events';
+    
+    console.log('Google OAuth Configuration:');
+    console.log('- Client ID:', clientId);
+    console.log('- Redirect URI:', redirectUri);
+    console.log('\nIMPORTANT: Add this URL to Google Cloud Console:');
+    console.log('1. Go to: https://console.cloud.google.com/apis/credentials');
+    console.log('2. Edit your OAuth Client ID');
+    console.log('3. Add to "Authorized JavaScript origins":', window.location.origin);
+    console.log('4. Add to "Authorized redirect URIs":', redirectUri);
     
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${clientId}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `response_type=token&` +
-      `scope=${encodeURIComponent(scope)}`;
+      `scope=${encodeURIComponent(scope)}&` +
+      `prompt=consent`;
     
-    window.open(authUrl, 'Google Calendar Auth', 'width=600,height=600');
+    const authWindow = window.open(authUrl, 'Google Calendar Auth', 'width=600,height=600');
+    
+    if (!authWindow) {
+      toast({
+        title: "Popup Blocked",
+        description: "Please allow popups for this site and try again",
+        variant: "destructive",
+      });
+    }
     
     const messageHandler = (event: MessageEvent) => {
       if (event.data.type === 'google-auth') {
