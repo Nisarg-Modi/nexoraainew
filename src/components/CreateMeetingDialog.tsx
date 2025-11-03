@@ -91,7 +91,7 @@ const CreateMeetingDialog = ({
     setSelectedParticipants(selectedParticipants.filter(p => p.user_id !== userId));
   };
 
-  const handleGoogleAuth = () => {
+  const handleGoogleAuth = async () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
     
     if (!clientId) {
@@ -103,57 +103,59 @@ const CreateMeetingDialog = ({
       return;
     }
     
-    const redirectUri = `${window.location.origin}/auth-callback.html`;
-    const scope = 'https://www.googleapis.com/auth/calendar.events';
-    
-    console.log('Google OAuth Configuration:');
-    console.log('- Client ID:', clientId);
-    console.log('- Redirect URI:', redirectUri);
-    console.log('\nIMPORTANT: Add these URLs to Google Cloud Console:');
-    console.log('1. Go to: https://console.cloud.google.com/apis/credentials');
-    console.log('2. Edit your OAuth Client ID');
-    console.log('3. Add to "Authorized JavaScript origins":', window.location.origin);
-    console.log('4. Add to "Authorized redirect URIs":', redirectUri);
-    
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${clientId}&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `response_type=token&` +
-      `scope=${encodeURIComponent(scope)}&` +
-      `prompt=consent`;
-    
-    const authWindow = window.open(authUrl, 'Google Calendar Auth', 'width=600,height=600');
-    
-    if (!authWindow) {
+    try {
+      // Use Supabase edge function to initiate OAuth flow server-side
+      const { data, error } = await supabase.functions.invoke('google-oauth', {
+        body: {
+          action: 'get-auth-url',
+          clientId,
+          redirectUri: `${window.location.origin}/auth-callback.html`,
+          scope: 'https://www.googleapis.com/auth/calendar.events',
+        },
+      });
+
+      if (error) throw error;
+
+      const authWindow = window.open(data.authUrl, 'Google Calendar Auth', 'width=600,height=600');
+      
+      if (!authWindow) {
+        toast({
+          title: "Popup Blocked",
+          description: "Please allow popups for this site and try again",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const messageHandler = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        
+        if (event.data.type === 'google-auth') {
+          setGoogleToken(event.data.token);
+          toast({
+            title: 'Connected',
+            description: 'Google Calendar connected successfully',
+          });
+          window.removeEventListener('message', messageHandler);
+        } else if (event.data.type === 'google-auth-error') {
+          toast({
+            title: 'Connection Failed',
+            description: 'Failed to connect to Google Calendar',
+            variant: 'destructive',
+          });
+          window.removeEventListener('message', messageHandler);
+        }
+      };
+      
+      window.addEventListener('message', messageHandler);
+    } catch (error) {
+      console.error('Auth error:', error);
       toast({
-        title: "Popup Blocked",
-        description: "Please allow popups for this site and try again",
+        title: "Setup Required",
+        description: "Please configure Google OAuth credentials in Google Cloud Console with these settings:\n\n1. JavaScript origin: " + window.location.origin + "\n2. Redirect URI: " + window.location.origin + "/auth-callback.html",
         variant: "destructive",
       });
-      return;
     }
-    
-    const messageHandler = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      
-      if (event.data.type === 'google-auth') {
-        setGoogleToken(event.data.token);
-        toast({
-          title: 'Connected',
-          description: 'Google Calendar connected successfully',
-        });
-        window.removeEventListener('message', messageHandler);
-      } else if (event.data.type === 'google-auth-error') {
-        toast({
-          title: 'Connection Failed',
-          description: 'Failed to connect to Google Calendar',
-          variant: 'destructive',
-        });
-        window.removeEventListener('message', messageHandler);
-      }
-    };
-    
-    window.addEventListener('message', messageHandler);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
