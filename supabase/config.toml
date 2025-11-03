@@ -33,8 +33,5 @@ verify_jwt = false
 [functions.elevenlabs-voice-clone]
 verify_jwt = false
 
-[functions.calendar-sync]
-verify_jwt = false
-
 [functions.emotion-analytics]
 verify_jwt = false

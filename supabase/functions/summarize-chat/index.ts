@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -83,7 +83,9 @@ serve(async (req) => {
 
     // Format conversation for AI
     const conversationText = messages.map(msg => {
-      const senderName = msg.profiles?.display_name || msg.profiles?.username || 'User';
+      // Handle profiles as it might be an array due to Supabase type inference
+      const profile = Array.isArray(msg.profiles) ? msg.profiles[0] : msg.profiles;
+      const senderName = profile?.display_name || profile?.username || 'User';
       const timestamp = new Date(msg.created_at).toLocaleString();
       return `[${timestamp}] ${senderName}: ${msg.content}`;
     }).join('\n');
