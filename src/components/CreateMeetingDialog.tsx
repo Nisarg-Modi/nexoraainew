@@ -43,8 +43,7 @@ const CreateMeetingDialog = ({
   const [searchResults, setSearchResults] = useState<Array<{ user_id: string; display_name: string; email?: string }>>([]);
   const [selectedParticipants, setSelectedParticipants] = useState<Array<{ user_id: string; display_name: string; email?: string }>>([]);
   const [searching, setSearching] = useState(false);
-  const [syncToCalendar, setSyncToCalendar] = useState(true);
-  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [downloadCalendarFile, setDownloadCalendarFile] = useState(true);
 
   const handleSearchParticipants = async () => {
     if (!participantSearch.trim()) {
@@ -91,71 +90,34 @@ const CreateMeetingDialog = ({
     setSelectedParticipants(selectedParticipants.filter(p => p.user_id !== userId));
   };
 
-  const handleGoogleAuth = async () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-    
-    if (!clientId) {
-      toast({
-        title: "Configuration Required",
-        description: "Please add VITE_GOOGLE_CLIENT_ID to your environment variables",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      // Use Supabase edge function to initiate OAuth flow server-side
-      const { data, error } = await supabase.functions.invoke('google-oauth', {
-        body: {
-          action: 'get-auth-url',
-          clientId,
-          redirectUri: `${window.location.origin}/auth-callback.html`,
-          scope: 'https://www.googleapis.com/auth/calendar.events',
-        },
-      });
+  const generateICSFile = (meeting: any) => {
+    const formatDate = (date: string) => {
+      return new Date(date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
 
-      if (error) throw error;
+    const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Nexora//Meeting//EN
+BEGIN:VEVENT
+UID:${meeting.id}@nexora.app
+DTSTAMP:${formatDate(new Date().toISOString())}
+DTSTART:${formatDate(meeting.scheduled_start)}
+DTEND:${formatDate(meeting.scheduled_end)}
+SUMMARY:${meeting.title}
+DESCRIPTION:${meeting.description || 'Meeting scheduled via Nexora'}\\n\\nJoin: ${meeting.meeting_link}
+LOCATION:${meeting.meeting_link}
+STATUS:CONFIRMED
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR`;
 
-      const authWindow = window.open(data.authUrl, 'Google Calendar Auth', 'width=600,height=600');
-      
-      if (!authWindow) {
-        toast({
-          title: "Popup Blocked",
-          description: "Please allow popups for this site and try again",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      const messageHandler = (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) return;
-        
-        if (event.data.type === 'google-auth') {
-          setGoogleToken(event.data.token);
-          toast({
-            title: 'Connected',
-            description: 'Google Calendar connected successfully',
-          });
-          window.removeEventListener('message', messageHandler);
-        } else if (event.data.type === 'google-auth-error') {
-          toast({
-            title: 'Connection Failed',
-            description: 'Failed to connect to Google Calendar',
-            variant: 'destructive',
-          });
-          window.removeEventListener('message', messageHandler);
-        }
-      };
-      
-      window.addEventListener('message', messageHandler);
-    } catch (error) {
-      console.error('Auth error:', error);
-      toast({
-        title: "Setup Required",
-        description: "Please configure Google OAuth credentials in Google Cloud Console with these settings:\n\n1. JavaScript origin: " + window.location.origin + "\n2. Redirect URI: " + window.location.origin + "/auth-callback.html",
-        variant: "destructive",
-      });
-    }
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${meeting.title.replace(/[^a-z0-9]/gi, '_')}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -204,39 +166,17 @@ const CreateMeetingDialog = ({
 
       if (participantError) throw participantError;
 
-      // Sync to Google Calendar if enabled
-      if (syncToCalendar && googleToken) {
-        try {
-          const { error: syncError } = await supabase.functions.invoke('calendar-sync', {
-            body: {
-              action: 'create-event',
-              meetingId: meeting.id,
-              calendarType: 'google',
-              accessToken: googleToken,
-            },
-          });
-
-          if (syncError) {
-            console.error('Calendar sync error:', syncError);
-            toast({
-              title: "Meeting Created",
-              description: "Meeting created but failed to sync with Google Calendar",
-            });
-          } else {
-            toast({
-              title: "Meeting Created & Synced",
-              description: `Meeting scheduled and added to Google Calendar with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''}`,
-            });
-          }
-        } catch (syncError) {
-          console.error('Calendar sync failed:', syncError);
-        }
-      } else {
-        toast({
-          title: "Meeting Created",
-          description: `Meeting scheduled with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''}`,
-        });
+      // Download calendar file if enabled
+      if (downloadCalendarFile) {
+        generateICSFile(meeting);
       }
+
+      toast({
+        title: "Meeting Created",
+        description: downloadCalendarFile 
+          ? `Meeting scheduled with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''} - Calendar file downloaded`
+          : `Meeting scheduled with ${selectedParticipants.length} participant${selectedParticipants.length > 1 ? 's' : ''}`,
+      });
 
       setFormData({
         title: "",
@@ -246,7 +186,7 @@ const CreateMeetingDialog = ({
         isVideo: true,
       });
       setSelectedParticipants([]);
-      setSyncToCalendar(true);
+      setDownloadCalendarFile(true);
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -414,38 +354,20 @@ const CreateMeetingDialog = ({
             />
           </div>
 
-          <div className="space-y-3 p-4 bg-muted rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-primary" />
-                <div>
-                  <p className="font-medium">Google Calendar Sync</p>
-                  <p className="text-sm text-muted-foreground">
-                    {googleToken ? "Connected" : "Add to calendar after creation"}
-                  </p>
-                </div>
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-5 h-5 text-primary" />
+              <div>
+                <p className="font-medium">Download Calendar Invite</p>
+                <p className="text-sm text-muted-foreground">
+                  Get .ics file to add to any calendar app
+                </p>
               </div>
-              {!googleToken ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleGoogleAuth}
-                >
-                  Connect
-                </Button>
-              ) : (
-                <Switch
-                  checked={syncToCalendar}
-                  onCheckedChange={setSyncToCalendar}
-                />
-              )}
             </div>
-            {!googleToken && (
-              <p className="text-xs text-muted-foreground">
-                Connect Google Calendar to automatically send invites to all participants
-              </p>
-            )}
+            <Switch
+              checked={downloadCalendarFile}
+              onCheckedChange={setDownloadCalendarFile}
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
