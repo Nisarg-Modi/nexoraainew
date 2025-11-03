@@ -103,13 +103,13 @@ const CreateMeetingDialog = ({
       return;
     }
     
-    const redirectUri = `${window.location.origin}/`;
+    const redirectUri = `${window.location.origin}/auth-callback.html`;
     const scope = 'https://www.googleapis.com/auth/calendar.events';
     
     console.log('Google OAuth Configuration:');
     console.log('- Client ID:', clientId);
     console.log('- Redirect URI:', redirectUri);
-    console.log('\nIMPORTANT: Add this URL to Google Cloud Console:');
+    console.log('\nIMPORTANT: Add these URLs to Google Cloud Console:');
     console.log('1. Go to: https://console.cloud.google.com/apis/credentials');
     console.log('2. Edit your OAuth Client ID');
     console.log('3. Add to "Authorized JavaScript origins":', window.location.origin);
@@ -130,14 +130,24 @@ const CreateMeetingDialog = ({
         description: "Please allow popups for this site and try again",
         variant: "destructive",
       });
+      return;
     }
     
     const messageHandler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      
       if (event.data.type === 'google-auth') {
         setGoogleToken(event.data.token);
         toast({
           title: 'Connected',
           description: 'Google Calendar connected successfully',
+        });
+        window.removeEventListener('message', messageHandler);
+      } else if (event.data.type === 'google-auth-error') {
+        toast({
+          title: 'Connection Failed',
+          description: 'Failed to connect to Google Calendar',
+          variant: 'destructive',
         });
         window.removeEventListener('message', messageHandler);
       }
