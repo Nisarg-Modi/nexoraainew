@@ -745,10 +745,6 @@ export type Database = {
         Args: { p_conversation_id: string; p_user_id: string }
         Returns: boolean
       }
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
       can_view_profile: {
         Args: { profile_user_id: string; viewer_id: string }
         Returns: boolean
@@ -795,10 +791,7 @@ export type Database = {
         Args: { other_user_id: string }
         Returns: string
       }
-      get_own_phone_number: {
-        Args: { user_uuid: string }
-        Returns: string
-      }
+      get_own_phone_number: { Args: { user_uuid: string }; Returns: string }
       get_safe_profile: {
         Args: { profile_user_id: string }
         Returns: {
@@ -825,26 +818,7 @@ export type Database = {
           username: string
         }[]
       }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      has_premium_access: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
+      has_premium_access: { Args: { user_uuid: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -852,26 +826,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      hash_identifier: {
-        Args: { identifier_text: string }
-        Returns: string
-      }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
+      hash_identifier: { Args: { identifier_text: string }; Returns: string }
       is_call_participant: {
         Args: { call_uuid: string; user_uuid: string }
         Returns: boolean
@@ -888,30 +843,7 @@ export type Database = {
         Args: { check_username: string }
         Returns: boolean
       }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
-      }
-      phone_number_exists: {
-        Args: { input_phone: string }
-        Returns: boolean
-      }
+      phone_number_exists: { Args: { input_phone: string }; Returns: boolean }
       record_login_attempt: {
         Args: { identifier_text: string; was_successful: boolean }
         Returns: undefined
@@ -947,42 +879,6 @@ export type Database = {
           sender_id: string
           similarity: number
         }[]
-      }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
-      }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
-        Args: { "": string }
-        Returns: number
-      }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
-        Returns: string
-      }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
       }
     }
     Enums: {
