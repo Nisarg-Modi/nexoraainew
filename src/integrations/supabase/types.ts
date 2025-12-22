@@ -839,6 +839,14 @@ export type Database = {
         Args: { conversation_uuid: string; user_uuid: string }
         Returns: boolean
       }
+      is_meeting_creator: {
+        Args: { meeting_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
+      is_meeting_participant: {
+        Args: { meeting_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
       is_username_available: {
         Args: { check_username: string }
         Returns: boolean
