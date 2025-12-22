@@ -18,6 +18,9 @@ serve(async (req) => {
       throw new Error('Missing authorization header');
     }
 
+    // Sanitize auth header to ensure it's a valid ByteString (ASCII only)
+    const sanitizedAuthHeader = authHeader.replace(/[^\x00-\x7F]/g, '');
+
     const { query, filters, limit = 10 } = await req.json();
     
     if (!query) {
@@ -37,7 +40,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
-          headers: { Authorization: authHeader },
+          headers: { Authorization: sanitizedAuthHeader },
         },
       }
     );
