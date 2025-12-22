@@ -51,16 +51,21 @@ serve(async (req) => {
       throw new Error('Message ID and content are required');
     }
 
-    // Remove ALL whitespace to avoid hidden newlines that break fetch header ByteString rules
-    const OPENAI_API_KEY = (Deno.env.get('OPENAI_API_KEY') ?? '').replace(/\s+/g, '');
+    // Remove whitespace + any non-ASCII characters (e.g. zero-width spaces) that can break
+    // Deno's fetch header ByteString validation.
+    const OPENAI_API_KEY_RAW = Deno.env.get('OPENAI_API_KEY') ?? '';
+    const OPENAI_API_KEY = OPENAI_API_KEY_RAW.replace(/[^\x21-\x7E]/g, ''); // printable ASCII only
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY is not configured');
     }
 
     // Avoid leaking secrets, but log helpful diagnostics
     console.log('OpenAI key diagnostics:', {
-      length: OPENAI_API_KEY.length,
-      hasWhitespace: /\s/.test(OPENAI_API_KEY),
+      rawLength: OPENAI_API_KEY_RAW.length,
+      cleanedLength: OPENAI_API_KEY.length,
+      removedChars: OPENAI_API_KEY_RAW.length - OPENAI_API_KEY.length,
+      rawHasNonAscii: /[^\x00-\x7F]/.test(OPENAI_API_KEY_RAW),
+      rawHasWhitespace: /\s/.test(OPENAI_API_KEY_RAW),
     });
 
     console.log('Generating embedding for message:', messageId);
