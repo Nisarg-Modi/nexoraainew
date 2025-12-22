@@ -28,9 +28,12 @@ serve(async (req) => {
     const safeToken = token.replace(/[^A-Za-z0-9._-]/g, '');
     const sanitizedAuthHeader = `Bearer ${safeToken}`;
 
+    const supabaseUrl = (Deno.env.get('SUPABASE_URL') ?? '').trim();
+    const supabaseAnonKey = (Deno.env.get('SUPABASE_ANON_KEY') ?? '').replace(/\s+/g, '');
+
     const userClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      supabaseUrl,
+      supabaseAnonKey,
       { global: { headers: { Authorization: sanitizedAuthHeader } } }
     );
 
@@ -43,12 +46,13 @@ serve(async (req) => {
     }
 
     const { messageId, content } = await req.json();
-    
+
     if (!messageId || !content) {
       throw new Error('Message ID and content are required');
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')?.trim();
+    // Remove ALL whitespace to avoid hidden newlines that break fetch header ByteString rules
+    const OPENAI_API_KEY = (Deno.env.get('OPENAI_API_KEY') ?? '').replace(/\s+/g, '');
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY is not configured');
     }
@@ -85,9 +89,11 @@ serve(async (req) => {
     const embedding = data.data[0].embedding;
 
     // Store embedding in database
+    const serviceKey = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '').replace(/\s+/g, '');
+
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      supabaseUrl,
+      serviceKey
     );
 
     // Get message details
