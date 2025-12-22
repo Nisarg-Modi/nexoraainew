@@ -31,15 +31,16 @@ serve(async (req) => {
     socket.onopen = async () => {
       console.log("Client WebSocket connected");
 
-      // Connect to OpenAI Realtime API
+      // Connect to OpenAI Realtime API.
+      // Note: browsers can't send custom headers in WS, so OpenAI supports passing
+      // auth via WebSocket subprotocols (safe here since this runs server-side).
       const openAISocket = new WebSocket(
         "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
-        {
-          headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-            "OpenAI-Beta": "realtime=v1",
-          },
-        }
+        [
+          "realtime",
+          `openai-insecure-api-key.${OPENAI_API_KEY}`,
+          "openai-beta.realtime-v1",
+        ]
       );
 
       let sessionConfigured = false;
@@ -48,8 +49,11 @@ serve(async (req) => {
         console.log("OpenAI WebSocket connected");
       };
 
-      openAISocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      openAISocket.onmessage = (event: MessageEvent) => {
+        const raw = typeof event.data === "string" ? event.data : "";
+        if (!raw) return;
+
+        const data = JSON.parse(raw);
         console.log("OpenAI message type:", data.type);
 
         // Configure session after connection
@@ -99,8 +103,8 @@ serve(async (req) => {
         }
       };
 
-      openAISocket.onerror = (error) => {
-        console.error("OpenAI WebSocket error:", error);
+      openAISocket.onerror = (event: Event) => {
+        console.error("OpenAI WebSocket error:", event);
         socket.send(JSON.stringify({ type: "error", error: "OpenAI connection error" }));
       };
 
@@ -110,15 +114,18 @@ serve(async (req) => {
       };
 
       // Handle messages from client (audio data)
-      socket.onmessage = (event) => {
+      socket.onmessage = (event: MessageEvent) => {
         try {
-          const message = JSON.parse(event.data);
-          
+          const raw = typeof event.data === "string" ? event.data : "";
+          if (!raw) return;
+
+          const message = JSON.parse(raw);
+
           // Forward audio data to OpenAI
           if (message.type === "input_audio_buffer.append") {
             openAISocket.send(JSON.stringify(message));
           }
-          
+
           // Handle commit requests
           if (message.type === "input_audio_buffer.commit") {
             openAISocket.send(JSON.stringify(message));
