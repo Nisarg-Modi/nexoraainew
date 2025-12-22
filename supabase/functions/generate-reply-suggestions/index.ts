@@ -21,10 +21,13 @@ serve(async (req) => {
       );
     }
 
+    // Sanitize auth header to ensure it's a valid ByteString (ASCII only)
+    const sanitizedAuthHeader = authHeader.replace(/[^\x00-\x7F]/g, '');
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: sanitizedAuthHeader } } }
     );
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();

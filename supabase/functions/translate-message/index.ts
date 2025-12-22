@@ -53,12 +53,14 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const authHeader = req.headers.get('Authorization')!;
+    const authHeader = req.headers.get('Authorization') ?? '';
+    // Sanitize auth header to ensure it's a valid ByteString (ASCII only)
+    const sanitizedAuthHeader = authHeader.replace(/[^\x00-\x7F]/g, '');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: { Authorization: sanitizedAuthHeader } },
     });
 
     const { data: { user } } = await supabase.auth.getUser();
