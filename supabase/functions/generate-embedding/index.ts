@@ -22,8 +22,11 @@ serve(async (req) => {
       );
     }
 
-    // Sanitize auth header to ensure it's a valid ByteString (ASCII only)
-    const sanitizedAuthHeader = authHeader.replace(/[^\x00-\x7F]/g, '');
+    // Normalize + sanitize auth header to ensure it's a valid ByteString
+    // (prevents invalid characters like CR/LF or other whitespace)
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const safeToken = token.replace(/[^A-Za-z0-9._-]/g, '');
+    const sanitizedAuthHeader = `Bearer ${safeToken}`;
 
     const userClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -45,10 +48,16 @@ serve(async (req) => {
       throw new Error('Message ID and content are required');
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')?.trim();
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY is not configured');
     }
+
+    // Avoid leaking secrets, but log helpful diagnostics
+    console.log('OpenAI key diagnostics:', {
+      length: OPENAI_API_KEY.length,
+      hasWhitespace: /\s/.test(OPENAI_API_KEY),
+    });
 
     console.log('Generating embedding for message:', messageId);
 
