@@ -59,24 +59,28 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY is not configured');
     }
 
-    // Avoid leaking secrets, but log helpful diagnostics
-    console.log('OpenAI key diagnostics:', {
-      rawLength: OPENAI_API_KEY_RAW.length,
-      cleanedLength: OPENAI_API_KEY.length,
-      removedChars: OPENAI_API_KEY_RAW.length - OPENAI_API_KEY.length,
-      rawHasNonAscii: /[^\x00-\x7F]/.test(OPENAI_API_KEY_RAW),
-      rawHasWhitespace: /\s/.test(OPENAI_API_KEY_RAW),
-    });
+    // Detect if this is an OpenRouter key (starts with sk-or-)
+    const isOpenRouter = OPENAI_API_KEY.startsWith('sk-or-');
+    const apiUrl = isOpenRouter
+      ? 'https://openrouter.ai/api/v1/embeddings'
+      : 'https://api.openai.com/v1/embeddings';
 
+    console.log('Embedding API:', isOpenRouter ? 'OpenRouter' : 'OpenAI');
     console.log('Generating embedding for message:', messageId);
 
-    // Generate embedding using OpenAI
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
+    // Generate embedding using OpenAI or OpenRouter
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    };
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = Deno.env.get('SUPABASE_URL') ?? 'https://lovable.dev';
+      headers['X-Title'] = 'Nexora Chat';
+    }
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: 'text-embedding-3-small',
         input: content,

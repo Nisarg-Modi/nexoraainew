@@ -27,12 +27,18 @@ serve(async (req) => {
       throw new Error('Search query is required');
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')?.trim();
+    const OPENAI_API_KEY = (Deno.env.get('OPENAI_API_KEY') ?? '').replace(/[^\x21-\x7E]/g, '');
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY is not configured');
     }
 
-    console.log('Performing semantic search for:', query);
+    // Detect if this is an OpenRouter key (starts with sk-or-)
+    const isOpenRouter = OPENAI_API_KEY.startsWith('sk-or-');
+    const apiUrl = isOpenRouter
+      ? 'https://openrouter.ai/api/v1/embeddings'
+      : 'https://api.openai.com/v1/embeddings';
+
+    console.log('Performing semantic search for:', query, 'using', isOpenRouter ? 'OpenRouter' : 'OpenAI');
 
     // Create Supabase client with user's auth
     const supabaseClient = createClient(
@@ -59,13 +65,19 @@ serve(async (req) => {
 
     const hasPremium = subscription?.plan_type === 'premium' || subscription?.plan_type === 'enterprise';
 
-    // Generate query embedding using OpenAI
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
+    // Generate query embedding
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    };
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = Deno.env.get('SUPABASE_URL') ?? 'https://lovable.dev';
+      headers['X-Title'] = 'Nexora Chat';
+    }
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: 'text-embedding-3-small',
         input: query,
