@@ -1,14 +1,40 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { Capacitor } from '@capacitor/core';
-import { PushNotifications, PushNotificationSchema, Token, ActionPerformed } from '@capacitor/push-notifications';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+
+// Dynamically import Capacitor modules only when needed
+const getCapacitor = async () => {
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    return Capacitor;
+  } catch {
+    return null;
+  }
+};
+
+const getPushNotifications = async () => {
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    return PushNotifications;
+  } catch {
+    return null;
+  }
+};
 
 export const useCapacitorPushNotifications = () => {
   const { user } = useAuth();
   const registeredRef = useRef(false);
+  const listenersRef = useRef<Array<{ remove: () => void }>>([]);
 
   const registerPushNotifications = useCallback(async () => {
+    const Capacitor = await getCapacitor();
+    const PushNotifications = await getPushNotifications();
+
+    if (!Capacitor || !PushNotifications) {
+      console.log('Capacitor not available, skipping push notifications');
+      return;
+    }
+
     if (!Capacitor.isNativePlatform()) {
       console.log('Not a native platform, skipping Capacitor push notifications');
       return;
@@ -42,73 +68,101 @@ export const useCapacitorPushNotifications = () => {
   }, []);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !user?.id) return;
+    if (!user?.id) return;
 
-    // Handle registration success
-    const tokenListener = PushNotifications.addListener(
-      'registration',
-      async (token: Token) => {
-        console.log('Push registration success, token:', token.value);
+    let isMounted = true;
 
-        // Save token to server
-        try {
-          await supabase.functions.invoke('save-push-subscription', {
-            body: {
-              subscription: {
-                endpoint: `capacitor://${Capacitor.getPlatform()}/${token.value}`,
-                keys: { fcm: token.value },
-              },
-              userId: user.id,
-              platform: Capacitor.getPlatform(),
-            },
-          });
-          console.log('Push token saved to server');
-        } catch (error) {
-          console.error('Error saving push token:', error);
-        }
+    const setupListeners = async () => {
+      const Capacitor = await getCapacitor();
+      const PushNotifications = await getPushNotifications();
+
+      if (!Capacitor || !PushNotifications || !Capacitor.isNativePlatform()) {
+        return;
       }
-    );
 
-    // Handle registration error
-    const errorListener = PushNotifications.addListener('registrationError', (error) => {
-      console.error('Push registration error:', error.error);
-    });
+      if (!isMounted) return;
 
-    // Handle incoming push notification
-    const pushReceivedListener = PushNotifications.addListener(
-      'pushNotificationReceived',
-      (notification: PushNotificationSchema) => {
-        console.log('Push notification received:', notification);
-        
-        // The GlobalIncomingCallListener will handle showing the call dialog
-        // This is just for when the app is in foreground
+      try {
+        // Handle registration success
+        const tokenListener = await PushNotifications.addListener(
+          'registration',
+          async (token: { value: string }) => {
+            console.log('Push registration success, token:', token.value);
+
+            // Save token to server
+            try {
+              await supabase.functions.invoke('save-push-subscription', {
+                body: {
+                  subscription: {
+                    endpoint: `capacitor://${Capacitor.getPlatform()}/${token.value}`,
+                    keys: { fcm: token.value },
+                  },
+                  userId: user.id,
+                  platform: Capacitor.getPlatform(),
+                },
+              });
+              console.log('Push token saved to server');
+            } catch (error) {
+              console.error('Error saving push token:', error);
+            }
+          }
+        );
+        listenersRef.current.push(tokenListener);
+
+        // Handle registration error
+        const errorListener = await PushNotifications.addListener(
+          'registrationError',
+          (error: { error: string }) => {
+            console.error('Push registration error:', error.error);
+          }
+        );
+        listenersRef.current.push(errorListener);
+
+        // Handle incoming push notification
+        const pushReceivedListener = await PushNotifications.addListener(
+          'pushNotificationReceived',
+          (notification: unknown) => {
+            console.log('Push notification received:', notification);
+          }
+        );
+        listenersRef.current.push(pushReceivedListener);
+
+        // Handle notification action (user tapped on notification)
+        const pushActionListener = await PushNotifications.addListener(
+          'pushNotificationActionPerformed',
+          (notification: { notification: { data?: { callId?: string; conversationId?: string } } }) => {
+            console.log('Push notification action performed:', notification);
+
+            const data = notification.notification.data;
+            
+            if (data?.callId) {
+              // Navigate to the call
+              window.location.href = `/?call=${data.callId}&conversation=${data.conversationId}`;
+            }
+          }
+        );
+        listenersRef.current.push(pushActionListener);
+
+        // Register for push notifications
+        registerPushNotifications();
+      } catch (error) {
+        console.error('Error setting up push notification listeners:', error);
       }
-    );
+    };
 
-    // Handle notification action (user tapped on notification)
-    const pushActionListener = PushNotifications.addListener(
-      'pushNotificationActionPerformed',
-      (notification: ActionPerformed) => {
-        console.log('Push notification action performed:', notification);
-
-        const data = notification.notification.data;
-        
-        if (data?.callId) {
-          // Navigate to the call
-          window.location.href = `/?call=${data.callId}&conversation=${data.conversationId}`;
-        }
-      }
-    );
-
-    // Register for push notifications
-    registerPushNotifications();
+    setupListeners();
 
     // Cleanup
     return () => {
-      tokenListener.then((l) => l.remove());
-      errorListener.then((l) => l.remove());
-      pushReceivedListener.then((l) => l.remove());
-      pushActionListener.then((l) => l.remove());
+      isMounted = false;
+      listenersRef.current.forEach((listener) => {
+        try {
+          listener.remove();
+        } catch (e) {
+          console.error('Error removing listener:', e);
+        }
+      });
+      listenersRef.current = [];
     };
   }, [user?.id, registerPushNotifications]);
 
