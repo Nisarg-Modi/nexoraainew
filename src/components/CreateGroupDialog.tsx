@@ -1,14 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Camera, Upload, Loader2 } from "lucide-react";
+import { Users, Camera, Upload, Loader2, Search, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { Badge } from "@/components/ui/badge";
 import { Camera as CapacitorCamera } from '@capacitor/camera';
 import { CameraResultType, CameraSource } from '@capacitor/camera';
 
@@ -36,9 +37,28 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
   const [groupAvatarUrl, setGroupAvatarUrl] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
+
+  // Filter contacts based on search query
+  const filteredContacts = useMemo(() => {
+    if (!searchQuery.trim()) return contacts;
+    const query = searchQuery.toLowerCase();
+    return contacts.filter((contact) => {
+      const displayName = contact.contact_name || contact.profiles?.display_name || '';
+      return displayName.toLowerCase().includes(query);
+    });
+  }, [contacts, searchQuery]);
+
+  // Get selected contact names for display
+  const selectedContactNames = useMemo(() => {
+    return selectedMembers.map(memberId => {
+      const contact = contacts.find(c => c.contact_user_id === memberId);
+      return contact?.contact_name || contact?.profiles?.display_name || 'Unknown';
+    });
+  }, [selectedMembers, contacts]);
 
   useEffect(() => {
     if (open) {
@@ -260,22 +280,76 @@ const CreateGroupDialog = ({ onGroupCreated }: CreateGroupDialogProps) => {
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label>Select Members ({selectedMembers.length})</Label>
-            <div className="border border-border rounded-lg max-h-64 overflow-y-auto">
+            
+            {/* Selected members badges */}
+            {selectedMembers.length > 0 && (
+              <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-lg">
+                {selectedContactNames.map((name, index) => (
+                  <Badge 
+                    key={selectedMembers[index]} 
+                    variant="secondary"
+                    className="flex items-center gap-1 pr-1"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMember(selectedMembers[index]);
+                      }}
+                      className="ml-1 hover:bg-muted rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Search box */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search contacts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Contacts list */}
+            <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
               {contacts.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
                   No contacts available. Add contacts first.
                 </p>
+              ) : filteredContacts.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No contacts match "{searchQuery}"
+                </p>
               ) : (
-                contacts.map((contact) => {
+                filteredContacts.map((contact) => {
                   const displayName = contact.contact_name || contact.profiles?.display_name || 'Unknown';
                   const isSelected = selectedMembers.includes(contact.contact_user_id);
                   
                   return (
                     <div
                       key={contact.id}
-                      className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-0"
+                      className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-0 transition-colors ${
+                        isSelected ? 'bg-primary/10' : ''
+                      }`}
                       onClick={() => toggleMember(contact.contact_user_id)}
                     >
                       <Checkbox
