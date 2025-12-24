@@ -35,3 +35,15 @@ verify_jwt = false
 
 [functions.emotion-analytics]
 verify_jwt = false
+
+[functions.notify-incoming-call]
+verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = false
+
+[functions.get-vapid-key]
+verify_jwt = false
+
+[functions.save-push-subscription]
+verify_jwt = true
