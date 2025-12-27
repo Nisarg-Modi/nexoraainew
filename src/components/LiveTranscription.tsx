@@ -59,8 +59,22 @@ const LiveTranscription = ({
   const startTranscription = async () => {
     try {
       setIsConnecting(true);
+      
+      // Get current session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to use transcription",
+          variant: "destructive",
+        });
+        setIsConnecting(false);
+        setIsRecording(false);
+        return;
+      }
+      
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || "jtlnhmpxytlgljnuspan";
-      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/realtime-transcription`;
+      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/realtime-transcription?token=${session.access_token}`;
 
       wsRef.current = new WebSocket(wsUrl);
 
