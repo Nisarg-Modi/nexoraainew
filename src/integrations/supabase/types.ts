@@ -191,6 +191,7 @@ export type Database = {
           contact_user_id: string
           created_at: string
           id: string
+          is_favourite: boolean | null
           user_id: string
         }
         Insert: {
@@ -198,6 +199,7 @@ export type Database = {
           contact_user_id: string
           created_at?: string
           id?: string
+          is_favourite?: boolean | null
           user_id: string
         }
         Update: {
@@ -205,6 +207,7 @@ export type Database = {
           contact_user_id?: string
           created_at?: string
           id?: string
+          is_favourite?: boolean | null
           user_id?: string
         }
         Relationships: []
