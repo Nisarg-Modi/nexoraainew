@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,35 @@ serve(async (req) => {
   if (upgradeHeader.toLowerCase() !== "websocket") {
     return new Response("Expected WebSocket connection", { status: 400 });
   }
+
+  // Extract auth token from query parameter
+  const url = new URL(req.url);
+  const token = url.searchParams.get("token");
+
+  if (!token) {
+    console.log("No authentication token provided");
+    return new Response(
+      JSON.stringify({ error: "Unauthorized: No authentication token provided" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Verify the token using Supabase
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+  if (authError || !user) {
+    console.log("Authentication failed:", authError?.message || "No user found");
+    return new Response(
+      JSON.stringify({ error: "Unauthorized: Invalid or expired token" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  console.log("User authenticated:", user.id);
 
   try {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
