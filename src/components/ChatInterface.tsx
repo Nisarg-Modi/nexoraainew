@@ -10,6 +10,7 @@ import ChatSummarizer from "./ChatSummarizer";
 import VoiceRecorder from "./VoiceRecorder";
 import MessageTranslator from "./MessageTranslator";
 import MessageReactions from "./MessageReactions";
+import TypingIndicator, { useTypingIndicator } from "./TypingIndicator";
 import { CallInterface } from "./CallInterface";
 import { IncomingCallDialog } from "./IncomingCallDialog";
 import { GroupBotSettings } from "./GroupBotSettings";
@@ -66,6 +67,7 @@ const ChatInterface = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { setTyping } = useTypingIndicator(conversationId, currentUserId);
 
   useEffect(() => {
     const initUser = async () => {
@@ -786,6 +788,15 @@ const handleDeleteMessage = async (messageId: string) => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Typing Indicator */}
+      {conversationId && currentUserId && (
+        <TypingIndicator 
+          conversationId={conversationId} 
+          currentUserId={currentUserId}
+          profilesCache={profilesCache}
+        />
+      )}
+
       {/* AI Suggestions */}
       {showAISuggestions && (
         <AISuggestions
@@ -860,8 +871,21 @@ const handleDeleteMessage = async (messageId: string) => {
           <div className="flex-1 relative">
             <Input
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleSend()}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                if (e.target.value.trim()) {
+                  setTyping(true);
+                } else {
+                  setTyping(false);
+                }
+              }}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  setTyping(false);
+                  handleSend();
+                }
+              }}
+              onBlur={() => setTyping(false)}
               placeholder="Message with Nexora AI..."
               className="bg-muted border-border pr-24"
             />
