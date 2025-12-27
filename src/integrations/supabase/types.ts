@@ -875,6 +875,13 @@ export type Database = {
           username: string
         }[]
       }
+      get_unread_counts: {
+        Args: { user_uuid: string }
+        Returns: {
+          conversation_id: string
+          unread_count: number
+        }[]
+      }
       get_viewable_profile: {
         Args: { profile_user_id: string; viewer_id: string }
         Returns: {
@@ -922,6 +929,10 @@ export type Database = {
       is_username_available: {
         Args: { check_username: string }
         Returns: boolean
+      }
+      mark_messages_read: {
+        Args: { conv_id: string; user_uuid: string }
+        Returns: undefined
       }
       phone_number_exists: { Args: { input_phone: string }; Returns: boolean }
       record_login_attempt: {
