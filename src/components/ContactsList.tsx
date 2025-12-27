@@ -5,12 +5,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserPlus, Search, Users } from "lucide-react";
+import { Search, Users, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import CreateGroupDialog from "./CreateGroupDialog";
+import { cn } from "@/lib/utils";
 
 interface Contact {
   id: string;
@@ -66,6 +66,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const [contactName, setContactName] = useState("");
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'favourites' | 'groups'>('all');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -289,203 +290,241 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     return statusMessages[index % statusMessages.length];
   };
 
+  // Get display items based on active filter
+  const getDisplayItems = () => {
+    if (activeFilter === 'groups') {
+      return { contacts: [], groups: filteredGroups };
+    }
+    // For now, all/unread/favourites show contacts (can be expanded later)
+    return { contacts: filteredContacts, groups: [] };
+  };
+
+  const { contacts: displayContacts, groups: displayGroups } = getDisplayItems();
+
+  const filterButtons = [
+    { key: 'all' as const, label: 'All' },
+    { key: 'unread' as const, label: 'Unread' },
+    { key: 'favourites' as const, label: 'Favourites' },
+    { key: 'groups' as const, label: 'Groups' },
+  ];
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Search Bar */}
-      <div className="p-3 border-b border-border">
+      <div className="px-4 pt-4 pb-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
-            placeholder="🔍 Search or start new chat"
+            placeholder="Ask Meta AI or Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-muted/50 border-border rounded-full"
+            className="pl-12 h-12 bg-muted/30 border-0 rounded-full text-base placeholder:text-muted-foreground"
           />
         </div>
       </div>
 
-      {/* Add Contact and Create Group Buttons */}
-      <div className="px-3 py-2 border-b border-border space-y-2">
+      {/* Filter Pills */}
+      <div className="px-4 pb-3 flex items-center gap-2 overflow-x-auto">
+        {filterButtons.map((filter) => (
+          <button
+            key={filter.key}
+            onClick={() => setActiveFilter(filter.key)}
+            className={cn(
+              "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors border",
+              activeFilter === filter.key
+                ? "bg-primary/20 text-primary border-primary/30"
+                : "bg-transparent text-foreground border-border hover:bg-muted/50"
+            )}
+          >
+            {filter.label}
+          </button>
+        ))}
+        
+        {/* Add Button */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="w-full bg-primary hover:bg-primary-glow justify-start">
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add New Contact
-            </Button>
+            <button className="w-8 h-8 rounded-full border border-border flex items-center justify-center hover:bg-muted/50 transition-colors flex-shrink-0">
+              <Plus className="w-4 h-4 text-muted-foreground" />
+            </button>
           </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Contact</DialogTitle>
-                <DialogDescription>
-                  Enter a username to find and add a Nexora user to your contacts
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    maxLength={30}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter the Nexora user's username
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Contact Name (optional)</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="John Doe"
-                    value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
-                    maxLength={50}
-                  />
-                </div>
-                <Button
-                  onClick={addContact}
-                  disabled={loading}
-                  className="w-full"
-                >
-                  {loading ? "Adding..." : "Add Contact"}
-                </Button>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Contact</DialogTitle>
+              <DialogDescription>
+                Enter a username to find and add a Nexora user to your contacts
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  maxLength={30}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the Nexora user's username
+                </p>
               </div>
-            </DialogContent>
+              <div className="space-y-2">
+                <Label htmlFor="name">Contact Name (optional)</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="John Doe"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  maxLength={50}
+                />
+              </div>
+              <Button
+                onClick={addContact}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? "Adding..." : "Add Contact"}
+              </Button>
+            </div>
+          </DialogContent>
         </Dialog>
-        <CreateGroupDialog 
-          onGroupCreated={(conversationId, groupName) => {
-            fetchGroups();
-            onStartGroupChat(conversationId, groupName);
-          }} 
-        />
       </div>
 
-      {/* Tabs for Contacts and Groups */}
-      <Tabs defaultValue="contacts" className="flex-1 flex flex-col">
-        <TabsList className="mx-3 grid w-auto grid-cols-2">
-          <TabsTrigger value="contacts">Contacts</TabsTrigger>
-          <TabsTrigger value="groups">Groups ({groups.length})</TabsTrigger>
-        </TabsList>
+      {/* Create Group Button (shown only in groups filter) */}
+      {activeFilter === 'groups' && (
+        <div className="px-4 pb-3">
+          <CreateGroupDialog 
+            onGroupCreated={(conversationId, groupName) => {
+              fetchGroups();
+              onStartGroupChat(conversationId, groupName);
+            }} 
+          />
+        </div>
+      )}
 
-        {/* Contacts Tab */}
-        <TabsContent value="contacts" className="flex-1 overflow-y-auto mt-0">
-        {filteredContacts.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <p className="text-2xl mb-2">🔍</p>
-            <p className="text-muted-foreground mb-4">
-              {searchQuery ? "No contacts found" : "No contacts yet 📱"}
-            </p>
-            {!searchQuery && (
-              <p className="text-sm text-muted-foreground">
-                Add contacts by username to start chatting 💬
-              </p>
-            )}
-          </div>
-        ) : (
-          filteredContacts.map((contact, index) => {
-            const displayName = contact.contact_name || contact.profiles?.display_name || 'Unknown';
-            const emoji = getRandomEmoji(contact.contact_user_id);
-            const statusMsg = contact.profiles?.status || getStatusMessage(contact.contact_user_id);
-            const avatarColor = getAvatarColor(contact.contact_user_id);
-            const unreadCount = index % 5 === 0 ? Math.floor(Math.random() * 5) + 1 : 0;
-            
-            return (
-              <div
-                key={contact.id}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
-                onClick={() => onStartChat(contact.contact_user_id, displayName)}
-              >
-                {/* Avatar */}
-                <Avatar className="w-12 h-12 flex-shrink-0">
-                  <AvatarImage src={contact.profiles?.avatar_url || undefined} />
-                  <AvatarFallback className={`${avatarColor} text-white font-semibold`}>
-                    {displayName[0].toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold truncate text-foreground">
-                      {displayName} {emoji}
-                    </h3>
-                    <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                      {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground truncate flex-1">
-                      {statusMsg}
-                    </p>
-                    {unreadCount > 0 && (
-                      <Badge className="bg-accent text-accent-foreground rounded-full w-5 h-5 flex items-center justify-center p-0 text-xs ml-2">
-                        {unreadCount}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-        </TabsContent>
-
-        {/* Groups Tab */}
-        <TabsContent value="groups" className="flex-1 overflow-y-auto mt-0">
-          {filteredGroups.length === 0 ? (
-            <div className="text-center py-12 px-4">
-              <p className="text-2xl mb-2">👥</p>
-              <p className="text-muted-foreground mb-4">
-                {searchQuery ? "No groups found" : "No groups yet"}
-              </p>
-              {!searchQuery && (
-                <p className="text-sm text-muted-foreground">
-                  Create a group to chat with multiple contacts
+      {/* Contact/Group List */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Show Contacts */}
+        {activeFilter !== 'groups' && (
+          <>
+            {displayContacts.length === 0 ? (
+              <div className="text-center py-12 px-4">
+                <p className="text-2xl mb-2">🔍</p>
+                <p className="text-muted-foreground mb-4">
+                  {searchQuery ? "No contacts found" : "No contacts yet 📱"}
                 </p>
-              )}
-            </div>
-          ) : (
-            filteredGroups.map((group) => {
-              return (
-                <div
-                  key={group.id}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
-                  onClick={() => onStartGroupChat(group.id, group.group_name)}
-                >
-                  {/* Avatar */}
-                  <Avatar className="w-12 h-12 flex-shrink-0">
-                    <AvatarImage src={group.group_avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary text-white font-semibold">
-                      <Users className="w-6 h-6" />
-                    </AvatarFallback>
-                  </Avatar>
+                {!searchQuery && (
+                  <p className="text-sm text-muted-foreground">
+                    Add contacts by username to start chatting 💬
+                  </p>
+                )}
+              </div>
+            ) : (
+              displayContacts.map((contact, index) => {
+                const displayName = contact.contact_name || contact.profiles?.display_name || 'Unknown';
+                const emoji = getRandomEmoji(contact.contact_user_id);
+                const statusMsg = contact.profiles?.status || getStatusMessage(contact.contact_user_id);
+                const avatarColor = getAvatarColor(contact.contact_user_id);
+                const unreadCount = index % 5 === 0 ? Math.floor(Math.random() * 5) + 1 : 0;
+                
+                return (
+                  <div
+                    key={contact.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
+                    onClick={() => onStartChat(contact.contact_user_id, displayName)}
+                  >
+                    {/* Avatar */}
+                    <Avatar className="w-12 h-12 flex-shrink-0">
+                      <AvatarImage src={contact.profiles?.avatar_url || undefined} />
+                      <AvatarFallback className={`${avatarColor} text-white font-semibold`}>
+                        {displayName[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-semibold truncate text-foreground">
-                        {group.group_name}
-                      </h3>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                        {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground truncate flex-1">
-                        {group.participant_count} members
-                      </p>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-semibold truncate text-foreground">
+                          {displayName} {emoji}
+                        </h3>
+                        <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                          {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground truncate flex-1">
+                          {statusMsg}
+                        </p>
+                        {unreadCount > 0 && (
+                          <Badge className="bg-accent text-accent-foreground rounded-full w-5 h-5 flex items-center justify-center p-0 text-xs ml-2">
+                            {unreadCount}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </TabsContent>
-      </Tabs>
+                );
+              })
+            )}
+          </>
+        )}
+
+        {/* Show Groups */}
+        {activeFilter === 'groups' && (
+          <>
+            {displayGroups.length === 0 ? (
+              <div className="text-center py-12 px-4">
+                <p className="text-2xl mb-2">👥</p>
+                <p className="text-muted-foreground mb-4">
+                  {searchQuery ? "No groups found" : "No groups yet"}
+                </p>
+                {!searchQuery && (
+                  <p className="text-sm text-muted-foreground">
+                    Create a group to chat with multiple contacts
+                  </p>
+                )}
+              </div>
+            ) : (
+              displayGroups.map((group) => {
+                return (
+                  <div
+                    key={group.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
+                    onClick={() => onStartGroupChat(group.id, group.group_name)}
+                  >
+                    {/* Avatar */}
+                    <Avatar className="w-12 h-12 flex-shrink-0">
+                      <AvatarImage src={group.group_avatar_url || undefined} />
+                      <AvatarFallback className="bg-primary text-white font-semibold">
+                        <Users className="w-6 h-6" />
+                      </AvatarFallback>
+                    </Avatar>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-semibold truncate text-foreground">
+                          {group.group_name}
+                        </h3>
+                        <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                          {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground truncate flex-1">
+                          {group.participant_count} members
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
