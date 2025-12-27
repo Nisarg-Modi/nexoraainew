@@ -550,6 +550,7 @@ export type Database = {
           read_at: string | null
           sender_id: string
           transcription: string | null
+          updated_at: string | null
         }
         Insert: {
           ai_generated?: boolean | null
@@ -562,6 +563,7 @@ export type Database = {
           read_at?: string | null
           sender_id: string
           transcription?: string | null
+          updated_at?: string | null
         }
         Update: {
           ai_generated?: boolean | null
@@ -574,6 +576,7 @@ export type Database = {
           read_at?: string | null
           sender_id?: string
           transcription?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
