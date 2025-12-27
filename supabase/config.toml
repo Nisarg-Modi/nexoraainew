@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.save-push-subscription]
 verify_jwt = true
+
+[functions.nexora-ai-chat]
+verify_jwt = false
