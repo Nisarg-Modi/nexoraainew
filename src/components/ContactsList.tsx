@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { z } from "zod";
 import CreateGroupDialog from "./CreateGroupDialog";
 import NexoraAIChat from "./NexoraAIChat";
 import { cn } from "@/lib/utils";
+import { playNotificationSound } from "@/utils/notificationSound";
 interface Contact {
   id: string;
   contact_user_id: string;
@@ -74,6 +75,18 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const [aiQuery, setAiQuery] = useState('');
   const { toast } = useToast();
 
+  const currentUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const initUser = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        currentUserIdRef.current = userData.user.id;
+      }
+    };
+    initUser();
+  }, []);
+
   useEffect(() => {
     fetchContacts();
     fetchGroups();
@@ -89,9 +102,15 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
           schema: 'public',
           table: 'messages',
         },
-        () => {
+        (payload) => {
           // Refresh unread counts when a new message arrives
           fetchUnreadCounts();
+          
+          // Play notification sound if message is from someone else
+          const newMessage = payload.new as { sender_id: string };
+          if (newMessage.sender_id !== currentUserIdRef.current) {
+            playNotificationSound();
+          }
         }
       )
       .on(
