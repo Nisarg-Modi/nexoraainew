@@ -217,6 +217,7 @@ export type Database = {
           conversation_id: string
           id: string
           is_admin: boolean | null
+          is_muted: boolean | null
           joined_at: string
           user_id: string
         }
@@ -224,6 +225,7 @@ export type Database = {
           conversation_id: string
           id?: string
           is_admin?: boolean | null
+          is_muted?: boolean | null
           joined_at?: string
           user_id: string
         }
@@ -231,6 +233,7 @@ export type Database = {
           conversation_id?: string
           id?: string
           is_admin?: boolean | null
+          is_muted?: boolean | null
           joined_at?: string
           user_id?: string
         }

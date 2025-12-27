@@ -338,6 +338,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
         .from('conversation_participants')
         .select(`
           conversation_id,
+          is_muted,
           conversations!inner (
             id,
             group_name,
@@ -371,6 +372,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
                 group_name: conv.group_name || 'Unnamed Group',
                 group_avatar_url: conv.group_avatar_url,
                 participant_count: count || 0,
+                is_muted: item.is_muted || false,
               };
             })
         );
@@ -575,13 +577,37 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   };
 
   const toggleMuteGroup = async (groupId: string) => {
-    // Toggle mute state locally (in a real app, this would be persisted)
-    setGroups(prev => 
-      prev.map(g => g.id === groupId ? { ...g, is_muted: !g.is_muted } : g)
-    );
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
 
     const group = groups.find(g => g.id === groupId);
     const newMuteState = !group?.is_muted;
+
+    // Optimistically update UI
+    setGroups(prev => 
+      prev.map(g => g.id === groupId ? { ...g, is_muted: newMuteState } : g)
+    );
+
+    // Persist to database
+    const { error } = await supabase
+      .from('conversation_participants')
+      .update({ is_muted: newMuteState })
+      .eq('conversation_id', groupId)
+      .eq('user_id', userData.user.id);
+
+    if (error) {
+      console.error('Error updating mute setting:', error);
+      // Revert on error
+      setGroups(prev => 
+        prev.map(g => g.id === groupId ? { ...g, is_muted: !newMuteState } : g)
+      );
+      toast({
+        title: 'Error',
+        description: 'Failed to update mute setting',
+        variant: 'destructive',
+      });
+      return;
+    }
     
     toast({
       title: newMuteState ? 'Group muted' : 'Group unmuted',
