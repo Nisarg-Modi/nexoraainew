@@ -403,6 +403,44 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   };
 
   const deleteContact = async (contactId: string) => {
+    // Find the contact before removing it (for undo)
+    const contactToDelete = contacts.find(c => c.id === contactId);
+    if (!contactToDelete) return;
+
+    // Optimistically remove from UI
+    setContacts(prev => prev.filter(c => c.id !== contactId));
+
+    // Show toast with undo action
+    toast({
+      title: 'Contact deleted',
+      description: `${contactToDelete.contact_name || contactToDelete.profiles?.display_name || 'Contact'} has been removed`,
+      action: (
+        <button
+          onClick={async () => {
+            // Restore the contact
+            const { error } = await supabase
+              .from('contacts')
+              .insert({
+                id: contactToDelete.id,
+                user_id: (await supabase.auth.getUser()).data.user?.id,
+                contact_user_id: contactToDelete.contact_user_id,
+                contact_name: contactToDelete.contact_name,
+                is_favourite: contactToDelete.is_favourite,
+              });
+
+            if (!error) {
+              setContacts(prev => [...prev, contactToDelete]);
+              toast({ title: 'Contact restored' });
+            }
+          }}
+          className="px-3 py-1 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+        >
+          Undo
+        </button>
+      ),
+    });
+
+    // Actually delete from database
     const { error } = await supabase
       .from('contacts')
       .delete()
@@ -410,24 +448,55 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
 
     if (error) {
       console.error('Error deleting contact:', error);
+      // Restore on error
+      setContacts(prev => [...prev, contactToDelete]);
       toast({
         title: 'Error',
         description: 'Failed to delete contact',
         variant: 'destructive',
       });
-      return;
     }
-
-    setContacts(prev => prev.filter(c => c.id !== contactId));
-    toast({
-      title: 'Contact deleted',
-      description: 'The contact has been removed from your list',
-    });
   };
 
   const archiveContact = async (contactId: string, contactName: string) => {
-    // For now, archive means delete with a different message
-    // In the future, this could move to an "archived" status
+    // Find the contact before removing it (for undo)
+    const contactToArchive = contacts.find(c => c.id === contactId);
+    if (!contactToArchive) return;
+
+    // Optimistically remove from UI
+    setContacts(prev => prev.filter(c => c.id !== contactId));
+
+    // Show toast with undo action
+    toast({
+      title: 'Contact archived',
+      description: `${contactName} has been archived`,
+      action: (
+        <button
+          onClick={async () => {
+            // Restore the contact
+            const { error } = await supabase
+              .from('contacts')
+              .insert({
+                id: contactToArchive.id,
+                user_id: (await supabase.auth.getUser()).data.user?.id,
+                contact_user_id: contactToArchive.contact_user_id,
+                contact_name: contactToArchive.contact_name,
+                is_favourite: contactToArchive.is_favourite,
+              });
+
+            if (!error) {
+              setContacts(prev => [...prev, contactToArchive]);
+              toast({ title: 'Contact restored' });
+            }
+          }}
+          className="px-3 py-1 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+        >
+          Undo
+        </button>
+      ),
+    });
+
+    // Actually delete from database
     const { error } = await supabase
       .from('contacts')
       .delete()
@@ -435,19 +504,14 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
 
     if (error) {
       console.error('Error archiving contact:', error);
+      // Restore on error
+      setContacts(prev => [...prev, contactToArchive]);
       toast({
         title: 'Error',
         description: 'Failed to archive contact',
         variant: 'destructive',
       });
-      return;
     }
-
-    setContacts(prev => prev.filter(c => c.id !== contactId));
-    toast({
-      title: 'Contact archived',
-      description: `${contactName} has been archived`,
-    });
   };
 
   const filteredContacts = contacts.filter(contact => {
