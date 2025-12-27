@@ -13,6 +13,7 @@ import CreateGroupDialog from "./CreateGroupDialog";
 import NexoraAIChat from "./NexoraAIChat";
 import { cn } from "@/lib/utils";
 import { playNotificationSound } from "@/utils/notificationSound";
+import SwipeableContactItem from "./SwipeableContactItem";
 interface Contact {
   id: string;
   contact_user_id: string;
@@ -401,6 +402,54 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     );
   };
 
+  const deleteContact = async (contactId: string) => {
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', contactId);
+
+    if (error) {
+      console.error('Error deleting contact:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete contact',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setContacts(prev => prev.filter(c => c.id !== contactId));
+    toast({
+      title: 'Contact deleted',
+      description: 'The contact has been removed from your list',
+    });
+  };
+
+  const archiveContact = async (contactId: string, contactName: string) => {
+    // For now, archive means delete with a different message
+    // In the future, this could move to an "archived" status
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', contactId);
+
+    if (error) {
+      console.error('Error archiving contact:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to archive contact',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setContacts(prev => prev.filter(c => c.id !== contactId));
+    toast({
+      title: 'Contact archived',
+      description: `${contactName} has been archived`,
+    });
+  };
+
   const filteredContacts = contacts.filter(contact => {
     const name = contact.contact_name || contact.profiles?.display_name || '';
     const query = searchQuery.toLowerCase();
@@ -626,56 +675,19 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
                 const unreadCount = conversationId ? (unreadCounts[conversationId] || 0) : 0;
                 
                 return (
-                  <div
+                  <SwipeableContactItem
                     key={contact.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
-                    onClick={() => onStartChat(contact.contact_user_id, displayName)}
-                  >
-                    {/* Avatar */}
-                    <Avatar className="w-12 h-12 flex-shrink-0">
-                      <AvatarImage src={contact.profiles?.avatar_url || undefined} />
-                      <AvatarFallback className={`${avatarColor} text-white font-semibold`}>
-                        {displayName[0].toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold truncate text-foreground">
-                          {displayName} {emoji}
-                        </h3>
-                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                          <span className="text-xs text-muted-foreground">
-                            {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                          </span>
-                          <button
-                            onClick={(e) => toggleFavourite(contact.id, contact.is_favourite, e)}
-                            className="p-1 hover:bg-muted/50 rounded-full transition-colors"
-                          >
-                            <Star 
-                              className={cn(
-                                "w-4 h-4 transition-colors",
-                                contact.is_favourite 
-                                  ? "fill-yellow-400 text-yellow-400" 
-                                  : "text-muted-foreground hover:text-yellow-400"
-                              )} 
-                            />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground truncate flex-1">
-                          {statusMsg}
-                        </p>
-                        {unreadCount > 0 && (
-                          <Badge className="bg-accent text-accent-foreground rounded-full w-5 h-5 flex items-center justify-center p-0 text-xs ml-2">
-                            {unreadCount}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                    contact={contact}
+                    displayName={displayName}
+                    emoji={emoji}
+                    statusMsg={statusMsg}
+                    avatarColor={avatarColor}
+                    unreadCount={unreadCount}
+                    onStartChat={() => onStartChat(contact.contact_user_id, displayName)}
+                    onToggleFavourite={(e) => toggleFavourite(contact.id, contact.is_favourite, e)}
+                    onArchive={() => archiveContact(contact.id, displayName)}
+                    onDelete={() => deleteContact(contact.id)}
+                  />
                 );
               })
             )}
