@@ -9,6 +9,7 @@ import AISuggestions from "./AISuggestions";
 import ChatSummarizer from "./ChatSummarizer";
 import VoiceRecorder from "./VoiceRecorder";
 import MessageTranslator from "./MessageTranslator";
+import MessageReactions from "./MessageReactions";
 import { CallInterface } from "./CallInterface";
 import { IncomingCallDialog } from "./IncomingCallDialog";
 import { GroupBotSettings } from "./GroupBotSettings";
@@ -775,6 +776,7 @@ const handleDeleteMessage = async (messageId: string) => {
               isGroup={isGroup}
               onDelete={handleDeleteMessage}
               onEdit={handleEditMessage}
+              currentUserId={currentUserId}
             />
           ))
         )}
@@ -979,13 +981,15 @@ const MessageBubble = ({
   contactName, 
   isGroup,
   onDelete,
-  onEdit
+  onEdit,
+  currentUserId
 }: { 
   message: Message; 
   contactName: string; 
   isGroup?: boolean;
   onDelete?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
+  currentUserId: string | null;
 }) => {
   const isUser = message.sender === "user";
   const isAI = message.sender === "ai";
@@ -1125,6 +1129,7 @@ const MessageBubble = ({
               </p>
             </div>
           </div>
+          <MessageReactions messageId={message.id} currentUserId={currentUserId} />
           <MessageTranslator messageId={message.id} messageText={message.text} />
         </div>
       </div>
