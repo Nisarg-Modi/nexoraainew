@@ -78,6 +78,39 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     fetchContacts();
     fetchGroups();
     fetchUnreadCounts();
+
+    // Subscribe to new messages for real-time unread count updates
+    const channel = supabase
+      .channel('unread-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          // Refresh unread counts when a new message arrives
+          fetchUnreadCounts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          // Refresh when messages are marked as read
+          fetchUnreadCounts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchUnreadCounts = async () => {
