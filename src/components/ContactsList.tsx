@@ -5,13 +5,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, Users, Plus } from "lucide-react";
+import { Search, Users, Plus, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import CreateGroupDialog from "./CreateGroupDialog";
+import NexoraAIChat from "./NexoraAIChat";
 import { cn } from "@/lib/utils";
-
 interface Contact {
   id: string;
   contact_user_id: string;
@@ -67,6 +67,8 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'favourites' | 'groups'>('all');
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [aiQuery, setAiQuery] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -308,6 +310,35 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     { key: 'groups' as const, label: 'Groups' },
   ];
 
+  // Handle AI query submission
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      // Check if it looks like an AI query (starts with question words or contains "?")
+      const aiTriggers = ['what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'would', 'should', 'is', 'are', 'do', 'does', 'tell', 'explain', 'help'];
+      const queryLower = searchQuery.toLowerCase().trim();
+      const isAIQuery = queryLower.includes('?') || aiTriggers.some(trigger => queryLower.startsWith(trigger));
+      
+      if (isAIQuery) {
+        setAiQuery(searchQuery);
+        setShowAIChat(true);
+        setSearchQuery('');
+      }
+    }
+  };
+
+  // Show AI Chat if active
+  if (showAIChat) {
+    return (
+      <NexoraAIChat 
+        onClose={() => {
+          setShowAIChat(false);
+          setAiQuery('');
+        }} 
+        initialQuery={aiQuery}
+      />
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Search Bar */}
@@ -318,8 +349,24 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
             placeholder="Ask Nexora AI or Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-12 h-12 bg-muted/30 border-0 rounded-full text-base placeholder:text-muted-foreground"
+            onKeyDown={handleSearchKeyDown}
+            className="pl-12 pr-12 h-12 bg-muted/30 border-0 rounded-full text-base placeholder:text-muted-foreground"
           />
+          {/* AI Button */}
+          <button
+            onClick={() => {
+              if (searchQuery.trim()) {
+                setAiQuery(searchQuery);
+                setShowAIChat(true);
+                setSearchQuery('');
+              } else {
+                setShowAIChat(true);
+              }
+            }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center hover:opacity-90 transition-opacity"
+          >
+            <Sparkles className="w-4 h-4 text-primary-foreground" />
+          </button>
         </div>
       </div>
 
