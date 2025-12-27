@@ -14,6 +14,8 @@ import NexoraAIChat from "./NexoraAIChat";
 import { cn } from "@/lib/utils";
 import { playNotificationSound } from "@/utils/notificationSound";
 import SwipeableContactItem from "./SwipeableContactItem";
+import SwipeableGroupItem from "./SwipeableGroupItem";
+
 interface Contact {
   id: string;
   contact_user_id: string;
@@ -31,6 +33,7 @@ interface GroupConversation {
   group_name: string;
   group_avatar_url: string | null;
   participant_count: number;
+  is_muted?: boolean;
 }
 
 const avatarColors = [
@@ -514,6 +517,80 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     }
   };
 
+  const leaveGroup = async (groupId: string, groupName: string) => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
+    // Find the group before removing it (for undo)
+    const groupToLeave = groups.find(g => g.id === groupId);
+    if (!groupToLeave) return;
+
+    // Optimistically remove from UI
+    setGroups(prev => prev.filter(g => g.id !== groupId));
+
+    // Show toast with undo action
+    toast({
+      title: 'Left group',
+      description: `You left ${groupName}`,
+      action: (
+        <button
+          onClick={async () => {
+            // Rejoin the group
+            const { error } = await supabase
+              .from('conversation_participants')
+              .insert({
+                conversation_id: groupId,
+                user_id: userData.user.id,
+              });
+
+            if (!error) {
+              setGroups(prev => [...prev, groupToLeave]);
+              toast({ title: 'Rejoined group' });
+            }
+          }}
+          className="px-3 py-1 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+        >
+          Undo
+        </button>
+      ),
+    });
+
+    // Actually leave the group
+    const { error } = await supabase
+      .from('conversation_participants')
+      .delete()
+      .eq('conversation_id', groupId)
+      .eq('user_id', userData.user.id);
+
+    if (error) {
+      console.error('Error leaving group:', error);
+      // Restore on error
+      setGroups(prev => [...prev, groupToLeave]);
+      toast({
+        title: 'Error',
+        description: 'Failed to leave group',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const toggleMuteGroup = async (groupId: string) => {
+    // Toggle mute state locally (in a real app, this would be persisted)
+    setGroups(prev => 
+      prev.map(g => g.id === groupId ? { ...g, is_muted: !g.is_muted } : g)
+    );
+
+    const group = groups.find(g => g.id === groupId);
+    const newMuteState = !group?.is_muted;
+    
+    toast({
+      title: newMuteState ? 'Group muted' : 'Group unmuted',
+      description: newMuteState 
+        ? 'You won\'t receive notifications from this group' 
+        : 'You\'ll receive notifications from this group',
+    });
+  };
+
   const filteredContacts = contacts.filter(contact => {
     const name = contact.contact_name || contact.profiles?.display_name || '';
     const query = searchQuery.toLowerCase();
@@ -775,37 +852,18 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
               </div>
             ) : (
               displayGroups.map((group) => {
+                const groupUnreadCount = unreadCounts[group.id] || 0;
+                
                 return (
-                  <div
+                  <SwipeableGroupItem
                     key={group.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer border-b border-border/50"
-                    onClick={() => onStartGroupChat(group.id, group.group_name)}
-                  >
-                    {/* Avatar */}
-                    <Avatar className="w-12 h-12 flex-shrink-0">
-                      <AvatarImage src={group.group_avatar_url || undefined} />
-                      <AvatarFallback className="bg-primary text-white font-semibold">
-                        <Users className="w-6 h-6" />
-                      </AvatarFallback>
-                    </Avatar>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold truncate text-foreground">
-                          {group.group_name}
-                        </h3>
-                        <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                          {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground truncate flex-1">
-                          {group.participant_count} members
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                    group={group}
+                    unreadCount={groupUnreadCount}
+                    isMuted={group.is_muted}
+                    onStartChat={() => onStartGroupChat(group.id, group.group_name)}
+                    onLeave={() => leaveGroup(group.id, group.group_name)}
+                    onToggleMute={() => toggleMuteGroup(group.id)}
+                  />
                 );
               })
             )}
