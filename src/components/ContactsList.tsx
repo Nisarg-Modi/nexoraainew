@@ -315,7 +315,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
-            placeholder="Ask Meta AI or Search"
+            placeholder="Ask Nexora AI or Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-12 h-12 bg-muted/30 border-0 rounded-full text-base placeholder:text-muted-foreground"
