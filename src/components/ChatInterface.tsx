@@ -31,6 +31,7 @@ interface Message {
   messageType?: 'text' | 'audio' | 'image';
   audioData?: string;
   transcription?: string;
+  isEdited?: boolean;
 }
 
 const ChatInterface = ({ 
@@ -223,6 +224,7 @@ const ChatInterface = ({
           messageType: (msg.message_type || 'text') as 'text' | 'audio' | 'image',
           audioData: msg.audio_data || undefined,
           transcription: msg.transcription || undefined,
+          isEdited: !!(msg as any).updated_at,
         } as Message;
       });
       
@@ -281,6 +283,7 @@ const ChatInterface = ({
                 messageType: (newMsg.message_type || 'text') as 'text' | 'audio' | 'image',
                 audioData: newMsg.audio_data || undefined,
                 transcription: newMsg.transcription || undefined,
+                isEdited: !!newMsg.updated_at,
               },
             ];
           });
@@ -637,7 +640,7 @@ const handleDeleteMessage = async (messageId: string) => {
       if (error) throw error;
 
       setMessages(prev => prev.map(m => 
-        m.id === messageId ? { ...m, text: newContent } : m
+        m.id === messageId ? { ...m, text: newContent, isEdited: true } : m
       ));
       
       toast({
@@ -1121,11 +1124,12 @@ const MessageBubble = ({
               ) : (
                 <p className="text-sm">{message.text}</p>
               )}
-              <p className="text-xs opacity-70 mt-1">
+              <p className="text-xs opacity-70 mt-1 flex items-center gap-1">
                 {message.timestamp.toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
+                {message.isEdited && <span className="italic">(edited)</span>}
               </p>
             </div>
           </div>
