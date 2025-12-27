@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, Users, Plus, Sparkles } from "lucide-react";
+import { Search, Users, Plus, Sparkles, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
@@ -16,6 +16,7 @@ interface Contact {
   id: string;
   contact_user_id: string;
   contact_name: string | null;
+  is_favourite: boolean;
   profiles: {
     display_name: string | null;
     status: string | null;
@@ -97,6 +98,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
 
           return {
             ...contact,
+            is_favourite: contact.is_favourite || false,
             profiles: profile?.[0] || {
               display_name: null,
               status: null,
@@ -266,10 +268,41 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     }
   };
 
+  const toggleFavourite = async (contactId: string, currentState: boolean, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering chat
+    
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_favourite: !currentState })
+      .eq('id', contactId);
+
+    if (error) {
+      console.error('Error toggling favourite:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update favourite status',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Update local state
+    setContacts(prev => 
+      prev.map(c => c.id === contactId ? { ...c, is_favourite: !currentState } : c)
+    );
+  };
+
   const filteredContacts = contacts.filter(contact => {
     const name = contact.contact_name || contact.profiles?.display_name || '';
     const query = searchQuery.toLowerCase();
-    return name.toLowerCase().includes(query);
+    const matchesSearch = name.toLowerCase().includes(query);
+    
+    // Apply favourites filter
+    if (activeFilter === 'favourites') {
+      return matchesSearch && contact.is_favourite;
+    }
+    
+    return matchesSearch;
   });
 
   const filteredGroups = groups.filter(group => {
@@ -297,7 +330,6 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     if (activeFilter === 'groups') {
       return { contacts: [], groups: filteredGroups };
     }
-    // For now, all/unread/favourites show contacts (can be expanded later)
     return { contacts: filteredContacts, groups: [] };
   };
 
@@ -496,9 +528,24 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
                         <h3 className="font-semibold truncate text-foreground">
                           {displayName} {emoji}
                         </h3>
-                        <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                          {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </span>
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                          </span>
+                          <button
+                            onClick={(e) => toggleFavourite(contact.id, contact.is_favourite, e)}
+                            className="p-1 hover:bg-muted/50 rounded-full transition-colors"
+                          >
+                            <Star 
+                              className={cn(
+                                "w-4 h-4 transition-colors",
+                                contact.is_favourite 
+                                  ? "fill-yellow-400 text-yellow-400" 
+                                  : "text-muted-foreground hover:text-yellow-400"
+                              )} 
+                            />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground truncate flex-1">
