@@ -62,6 +62,8 @@ const usernameSchema = z.string().trim().min(3, "Username must be at least 3 cha
 const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [groups, setGroups] = useState<GroupConversation[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [conversationMap, setConversationMap] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [username, setUsername] = useState("");
   const [contactName, setContactName] = useState("");
@@ -75,9 +77,39 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   useEffect(() => {
     fetchContacts();
     fetchGroups();
+    fetchUnreadCounts();
   }, []);
 
+  const fetchUnreadCounts = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data, error } = await supabase.rpc('get_unread_counts', {
+        user_uuid: userData.user.id
+      });
+
+      if (error) {
+        console.error('Error fetching unread counts:', error);
+        return;
+      }
+
+      if (data) {
+        const counts: Record<string, number> = {};
+        data.forEach((item: { conversation_id: string; unread_count: number }) => {
+          counts[item.conversation_id] = Number(item.unread_count);
+        });
+        setUnreadCounts(counts);
+      }
+    } catch (error) {
+      console.error('Error in fetchUnreadCounts:', error);
+    }
+  };
+
   const fetchContacts = async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
     const { data, error } = await supabase
       .from('contacts')
       .select('*')
@@ -89,12 +121,36 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
       return;
     }
 
-    // Fetch profile data for each contact using secure function (excludes phone_number)
+    // Fetch profile data and conversation IDs for each contact
     if (data) {
+      const convMap: Record<string, string> = {};
+      
       const contactsWithProfiles = await Promise.all(
         data.map(async (contact) => {
           const { data: profile } = await supabase
             .rpc('get_safe_profile', { profile_user_id: contact.contact_user_id });
+
+          // Get conversation ID for this contact
+          const { data: convData } = await supabase
+            .from('conversation_participants')
+            .select('conversation_id')
+            .eq('user_id', userData.user.id);
+
+          if (convData) {
+            for (const cp of convData) {
+              const { data: otherParticipants } = await supabase
+                .from('conversation_participants')
+                .select('user_id, conversations!inner(is_group)')
+                .eq('conversation_id', cp.conversation_id)
+                .eq('conversations.is_group', false);
+
+              const isMatch = otherParticipants?.some(p => p.user_id === contact.contact_user_id);
+              if (isMatch && otherParticipants && otherParticipants.length === 2) {
+                convMap[contact.contact_user_id] = cp.conversation_id;
+                break;
+              }
+            }
+          }
 
           return {
             ...contact,
@@ -108,6 +164,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
         })
       );
       setContacts(contactsWithProfiles);
+      setConversationMap(convMap);
     }
   };
 
@@ -300,6 +357,13 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     // Apply favourites filter
     if (activeFilter === 'favourites') {
       return matchesSearch && contact.is_favourite;
+    }
+    
+    // Apply unread filter
+    if (activeFilter === 'unread') {
+      const conversationId = conversationMap[contact.contact_user_id];
+      const hasUnread = conversationId ? (unreadCounts[conversationId] || 0) > 0 : false;
+      return matchesSearch && hasUnread;
     }
     
     return matchesSearch;
@@ -501,12 +565,13 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
                 )}
               </div>
             ) : (
-              displayContacts.map((contact, index) => {
+              displayContacts.map((contact) => {
                 const displayName = contact.contact_name || contact.profiles?.display_name || 'Unknown';
                 const emoji = getRandomEmoji(contact.contact_user_id);
                 const statusMsg = contact.profiles?.status || getStatusMessage(contact.contact_user_id);
                 const avatarColor = getAvatarColor(contact.contact_user_id);
-                const unreadCount = index % 5 === 0 ? Math.floor(Math.random() * 5) + 1 : 0;
+                const conversationId = conversationMap[contact.contact_user_id];
+                const unreadCount = conversationId ? (unreadCounts[conversationId] || 0) : 0;
                 
                 return (
                   <div

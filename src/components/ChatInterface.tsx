@@ -93,10 +93,24 @@ const ChatInterface = ({
       fetchMessages();
       loadBotSettings();
       checkIfAdmin();
+      markMessagesAsRead();
       const cleanup = subscribeToMessages();
       return cleanup;
     }
   }, [conversationId, currentUserId]);
+
+  const markMessagesAsRead = async () => {
+    if (!conversationId || !currentUserId) return;
+    
+    try {
+      await supabase.rpc('mark_messages_read', {
+        conv_id: conversationId,
+        user_uuid: currentUserId
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
 
   const loadBotSettings = async () => {
     if (!conversationId) return;
