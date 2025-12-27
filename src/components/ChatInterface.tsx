@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings, MoreVertical, LogOut, Trash2 } from "lucide-react";
+import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings, MoreVertical, LogOut, Trash2, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -601,7 +601,7 @@ const ChatInterface = ({
     }
   };
 
-  const handleDeleteMessage = async (messageId: string) => {
+const handleDeleteMessage = async (messageId: string) => {
     try {
       const { error } = await supabase
         .from('messages')
@@ -621,6 +621,33 @@ const ChatInterface = ({
       toast({
         title: "Failed to delete",
         description: "Unable to delete the message. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ content: newContent })
+        .eq('id', messageId);
+
+      if (error) throw error;
+
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, text: newContent } : m
+      ));
+      
+      toast({
+        title: "Message updated",
+        description: "Your message has been edited.",
+      });
+    } catch (error) {
+      console.error('Error editing message:', error);
+      toast({
+        title: "Failed to edit",
+        description: "Unable to edit the message. Please try again.",
         variant: "destructive",
       });
     }
@@ -747,6 +774,7 @@ const ChatInterface = ({
               contactName={contactName}
               isGroup={isGroup}
               onDelete={handleDeleteMessage}
+              onEdit={handleEditMessage}
             />
           ))
         )}
@@ -950,17 +978,21 @@ const MessageBubble = ({
   message, 
   contactName, 
   isGroup,
-  onDelete 
+  onDelete,
+  onEdit
 }: { 
   message: Message; 
   contactName: string; 
   isGroup?: boolean;
   onDelete?: (messageId: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
 }) => {
   const isUser = message.sender === "user";
   const isAI = message.sender === "ai";
   const isAudio = message.messageType === 'audio';
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(message.text);
 
   const handleDelete = () => {
     if (onDelete) {
@@ -968,6 +1000,20 @@ const MessageBubble = ({
     }
     setShowDeleteConfirm(false);
   };
+
+  const handleSaveEdit = () => {
+    if (onEdit && editText.trim() && editText !== message.text) {
+      onEdit(message.id, editText.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditText(message.text);
+    setIsEditing(false);
+  };
+
+  const canEdit = isUser && !isAudio && message.messageType === 'text';
 
   return (
     <>
@@ -993,15 +1039,29 @@ const MessageBubble = ({
             <p className="text-xs text-muted-foreground px-1">{message.senderName}</p>
           )}
           <div className="flex items-start gap-1">
-            {isUser && onDelete && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity self-center"
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                <Trash2 className="w-3 h-3 text-destructive" />
-              </Button>
+            {isUser && !isEditing && (
+              <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center">
+                {canEdit && onEdit && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <Pencil className="w-3 h-3 text-muted-foreground" />
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setShowDeleteConfirm(true)}
+                  >
+                    <Trash2 className="w-3 h-3 text-destructive" />
+                  </Button>
+                )}
+              </div>
             )}
             <div
               className={cn(
@@ -1019,7 +1079,44 @@ const MessageBubble = ({
                   <span className="text-xs opacity-70">Voice message</span>
                 </div>
               )}
-              <p className="text-sm">{message.text}</p>
+              {isEditing ? (
+                <div className="flex flex-col gap-2">
+                  <Input
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="bg-primary-foreground text-primary min-w-[200px]"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveEdit();
+                      } else if (e.key === 'Escape') {
+                        handleCancelEdit();
+                      }
+                    }}
+                  />
+                  <div className="flex gap-1 justify-end">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 bg-primary-foreground/20 hover:bg-primary-foreground/30"
+                      onClick={handleCancelEdit}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 bg-primary-foreground/20 hover:bg-primary-foreground/30"
+                      onClick={handleSaveEdit}
+                    >
+                      <Check className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm">{message.text}</p>
+              )}
               <p className="text-xs opacity-70 mt-1">
                 {message.timestamp.toLocaleTimeString([], {
                   hour: "2-digit",
