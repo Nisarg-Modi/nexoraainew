@@ -132,6 +132,15 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
     sendMessage(input);
   };
 
+  const quickPrompts = [
+    { emoji: '😂', text: 'Tell me a joke' },
+    { emoji: '🌤️', text: "What's the weather like today?" },
+    { emoji: '💡', text: 'Give me a creative idea' },
+    { emoji: '📚', text: 'Recommend a book' },
+    { emoji: '🍳', text: 'Suggest a quick recipe' },
+    { emoji: '🎯', text: 'Help me stay motivated' },
+  ];
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
@@ -158,9 +167,26 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
               <Sparkles className="w-8 h-8 text-primary-foreground" />
             </div>
             <h3 className="font-semibold text-lg mb-2">Hi! I'm Nexora AI</h3>
-            <p className="text-muted-foreground text-sm max-w-xs">
-              I'm here to help you with questions, suggestions, and more. Just type your message below!
+            <p className="text-muted-foreground text-sm max-w-xs mb-6">
+              I'm here to help you with questions, suggestions, and more!
             </p>
+            
+            {/* Quick Prompts */}
+            <div className="w-full max-w-sm space-y-2">
+              <p className="text-xs text-muted-foreground mb-3">Try asking:</p>
+              <div className="grid grid-cols-2 gap-2">
+                {quickPrompts.map((prompt, index) => (
+                  <button
+                    key={index}
+                    onClick={() => sendMessage(prompt.text)}
+                    className="flex items-center gap-2 px-3 py-2.5 bg-muted/50 hover:bg-muted rounded-xl text-left transition-colors border border-border/50"
+                  >
+                    <span className="text-lg">{prompt.emoji}</span>
+                    <span className="text-sm text-foreground truncate">{prompt.text}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         
