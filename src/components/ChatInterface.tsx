@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings, MoreVertical, LogOut } from "lucide-react";
+import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings, MoreVertical, LogOut, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +61,7 @@ const ChatInterface = ({
   const [botSettings, setBotSettings] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -564,6 +565,42 @@ const ChatInterface = ({
     }
   };
 
+  const handleDeleteConversation = async () => {
+    if (!conversationId || !currentUserId) return;
+    
+    try {
+      // First delete the conversation participants
+      const { error: participantsError } = await supabase
+        .from('conversation_participants')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      if (participantsError) throw participantsError;
+
+      // Then delete the conversation itself
+      const { error: convError } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+
+      if (convError) throw convError;
+
+      toast({
+        title: "Chat deleted",
+        description: "The conversation has been deleted.",
+      });
+      
+      onBack();
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast({
+        title: "Failed to delete",
+        description: "Unable to delete the conversation. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <>
       <div className="min-h-screen bg-background flex flex-col">
@@ -632,18 +669,18 @@ const ChatInterface = ({
             </Sheet>
           )}
           {conversationId && <ChatSummarizer conversationId={conversationId} />}
-          {isGroup && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="hover:bg-primary/10"
-                >
-                  <MoreVertical className="w-5 h-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-primary/10"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isGroup ? (
                 <DropdownMenuItem 
                   onClick={() => setShowLeaveDialog(true)}
                   className="text-destructive focus:text-destructive"
@@ -651,9 +688,17 @@ const ChatInterface = ({
                   <LogOut className="w-4 h-4 mr-2" />
                   Leave Conversation
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+              ) : (
+                <DropdownMenuItem 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Chat
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
       {/* Messages */}
@@ -847,6 +892,26 @@ const ChatInterface = ({
             className="bg-destructive hover:bg-destructive/90"
           >
             Leave Conversation
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Chat?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete this conversation with "{contactName}"? All messages will be permanently deleted and cannot be recovered.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDeleteConversation}
+            className="bg-destructive hover:bg-destructive/90"
+          >
+            Delete Chat
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
