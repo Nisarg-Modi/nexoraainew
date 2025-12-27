@@ -601,6 +601,31 @@ const ChatInterface = ({
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) throw error;
+
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      
+      toast({
+        title: "Message deleted",
+        description: "The message has been removed.",
+      });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast({
+        title: "Failed to delete",
+        description: "Unable to delete the message. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <>
       <div className="min-h-screen bg-background flex flex-col">
@@ -721,6 +746,7 @@ const ChatInterface = ({
               message={message} 
               contactName={contactName}
               isGroup={isGroup}
+              onDelete={handleDeleteMessage}
             />
           ))
         )}
@@ -920,60 +946,112 @@ const ChatInterface = ({
   );
 };
 
-const MessageBubble = ({ message, contactName, isGroup }: { message: Message; contactName: string; isGroup?: boolean }) => {
+const MessageBubble = ({ 
+  message, 
+  contactName, 
+  isGroup,
+  onDelete 
+}: { 
+  message: Message; 
+  contactName: string; 
+  isGroup?: boolean;
+  onDelete?: (messageId: string) => void;
+}) => {
   const isUser = message.sender === "user";
   const isAI = message.sender === "ai";
   const isAudio = message.messageType === 'audio';
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(message.id);
+    }
+    setShowDeleteConfirm(false);
+  };
 
   return (
-    <div
-      className={cn(
-        "flex gap-2 animate-slide-up",
-        isUser ? "justify-end" : "justify-start"
-      )}
-    >
-      {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center flex-shrink-0">
-          {isAI ? (
-            <Sparkles className="w-4 h-4" />
-          ) : isGroup ? (
-            <span className="text-xs font-semibold">{message.senderName?.[0]?.toUpperCase()}</span>
-          ) : (
-            <span className="text-xs font-semibold">{contactName[0].toUpperCase()}</span>
-          )}
-        </div>
-      )}
-      <div className="flex flex-col gap-2 max-w-[70%]">
-        {isGroup && !isUser && (
-          <p className="text-xs text-muted-foreground px-1">{message.senderName}</p>
+    <>
+      <div
+        className={cn(
+          "flex gap-2 animate-slide-up group",
+          isUser ? "justify-end" : "justify-start"
         )}
-        <div
-          className={cn(
-            "rounded-2xl px-4 py-2",
-            isUser
-              ? "bg-primary text-primary-foreground"
-              : isAI
-              ? "bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 glow-ai"
-              : "bg-card border border-border"
+      >
+        {!isUser && (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center flex-shrink-0">
+            {isAI ? (
+              <Sparkles className="w-4 h-4" />
+            ) : isGroup ? (
+              <span className="text-xs font-semibold">{message.senderName?.[0]?.toUpperCase()}</span>
+            ) : (
+              <span className="text-xs font-semibold">{contactName[0].toUpperCase()}</span>
+            )}
+          </div>
+        )}
+        <div className="flex flex-col gap-2 max-w-[70%]">
+          {isGroup && !isUser && (
+            <p className="text-xs text-muted-foreground px-1">{message.senderName}</p>
           )}
-        >
-          {isAudio && (
-            <div className="flex items-center gap-2 mb-1">
-              <Mic className="w-3 h-3 opacity-70" />
-              <span className="text-xs opacity-70">Voice message</span>
+          <div className="flex items-start gap-1">
+            {isUser && onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity self-center"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="w-3 h-3 text-destructive" />
+              </Button>
+            )}
+            <div
+              className={cn(
+                "rounded-2xl px-4 py-2",
+                isUser
+                  ? "bg-primary text-primary-foreground"
+                  : isAI
+                  ? "bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 glow-ai"
+                  : "bg-card border border-border"
+              )}
+            >
+              {isAudio && (
+                <div className="flex items-center gap-2 mb-1">
+                  <Mic className="w-3 h-3 opacity-70" />
+                  <span className="text-xs opacity-70">Voice message</span>
+                </div>
+              )}
+              <p className="text-sm">{message.text}</p>
+              <p className="text-xs opacity-70 mt-1">
+                {message.timestamp.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
             </div>
-          )}
-          <p className="text-sm">{message.text}</p>
-          <p className="text-xs opacity-70 mt-1">
-            {message.timestamp.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
+          </div>
+          <MessageTranslator messageId={message.id} messageText={message.text} />
         </div>
-        <MessageTranslator messageId={message.id} messageText={message.text} />
       </div>
-    </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This message will be permanently deleted and cannot be recovered.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 
