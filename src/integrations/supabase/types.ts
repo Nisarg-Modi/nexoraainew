@@ -779,6 +779,10 @@ export type Database = {
         Args: { profile_user_id: string; viewer_id: string }
         Returns: boolean
       }
+      can_view_profile_rate_limited: {
+        Args: { profile_user_id: string; viewer_id: string }
+        Returns: boolean
+      }
       check_contact_rate_limit: {
         Args: { user_uuid: string }
         Returns: boolean
