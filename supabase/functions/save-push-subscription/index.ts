@@ -14,14 +14,45 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+    // Validate authentication - extract user from JWT
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create client with user's auth to validate their identity
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      console.error("Authentication failed:", authError);
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("Authenticated user:", user.id);
+
+    // Use service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { subscription, userId, platform } = await req.json();
+    // Get subscription data from request (userId is ignored - we use authenticated user's ID)
+    const { subscription, platform } = await req.json();
 
-    if (!subscription || !userId) {
-      throw new Error("subscription and userId are required");
+    if (!subscription) {
+      throw new Error("subscription is required");
     }
+
+    // Use authenticated user's ID, NOT client-supplied userId
+    const userId = user.id;
 
     // Check if subscription already exists
     const { data: existing } = await supabase
