@@ -84,9 +84,9 @@ const Index = () => {
                   <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span className="hidden xs:inline sm:inline">Contacts</span>
                 </TabsTrigger>
-                <TabsTrigger value="updates" className="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
+                <TabsTrigger value="syncs" className="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
                   <Radio className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span className="hidden xs:inline sm:inline">Updates</span>
+                  <span className="hidden xs:inline sm:inline">Syncs</span>
                 </TabsTrigger>
                 <TabsTrigger value="meetings" className="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
                   <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -128,7 +128,7 @@ const Index = () => {
               />
             </TabsContent>
             
-            <TabsContent value="updates" className="min-h-[60vh]">
+            <TabsContent value="syncs" className="min-h-[60vh]">
               <UpdatesView />
             </TabsContent>
             
