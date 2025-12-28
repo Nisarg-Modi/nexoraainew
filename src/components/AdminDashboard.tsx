@@ -7,6 +7,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ShieldAlert, Loader2, Shield, ShieldCheck, User } from "lucide-react";
 import { toast } from "sonner";
 import { Database } from "@/integrations/supabase/types";
@@ -23,12 +33,19 @@ interface UserProfile {
   roles: AppRole[];
 }
 
+interface RevokeConfirmation {
+  userId: string;
+  role: AppRole;
+  displayName: string;
+}
+
 export const AdminDashboard = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const [revokeConfirmation, setRevokeConfirmation] = useState<RevokeConfirmation | null>(null);
 
   useEffect(() => {
     checkAdminStatus();
@@ -129,6 +146,14 @@ export const AdminDashboard = () => {
     }
   };
 
+  const handleRoleClick = (userId: string, role: AppRole, displayName: string) => {
+    if (role === 'admin') {
+      setRevokeConfirmation({ userId, role, displayName });
+    } else {
+      revokeRole(userId, role);
+    }
+  };
+
   const revokeRole = async (userId: string, role: AppRole) => {
     try {
       const { error } = await supabase
@@ -140,6 +165,7 @@ export const AdminDashboard = () => {
       if (error) throw error;
 
       toast.success(`Role "${role}" revoked successfully`);
+      setRevokeConfirmation(null);
       loadAllUsers();
     } catch (error: any) {
       toast.error("Failed to revoke role: " + error.message);
@@ -262,7 +288,7 @@ export const AdminDashboard = () => {
                           key={role}
                           variant={getRoleBadgeVariant(role)}
                           className="flex items-center gap-1 cursor-pointer hover:opacity-80"
-                          onClick={() => revokeRole(user.user_id, role)}
+                          onClick={() => handleRoleClick(user.user_id, role, user.display_name)}
                           title="Click to revoke"
                         >
                           {getRoleIcon(role)}
@@ -320,6 +346,35 @@ export const AdminDashboard = () => {
           </TableBody>
         </Table>
       </CardContent>
+
+      <AlertDialog open={!!revokeConfirmation} onOpenChange={() => setRevokeConfirmation(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              Revoke Admin Access
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to revoke admin access from{" "}
+              <span className="font-semibold">{revokeConfirmation?.displayName}</span>?
+              This action will remove their administrative privileges immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (revokeConfirmation) {
+                  revokeRole(revokeConfirmation.userId, revokeConfirmation.role);
+                }
+              }}
+            >
+              Revoke Admin
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };
