@@ -21,6 +21,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useAutoTranslate } from "@/hooks/useAutoTranslate";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Message {
   id: string;
@@ -72,6 +74,49 @@ const ChatInterface = ({
   const { toast } = useToast();
   const { setTyping } = useTypingIndicator(conversationId, currentUserId);
   const { preferences, fetchPreferences, autoTranslateIncoming, translating } = useAutoTranslate();
+  const [localAutoTranslate, setLocalAutoTranslate] = useState<boolean | null>(null);
+  
+  // Sync local state with preferences
+  useEffect(() => {
+    if (localAutoTranslate === null && preferences.auto_translate !== undefined) {
+      setLocalAutoTranslate(preferences.auto_translate);
+    }
+  }, [preferences.auto_translate, localAutoTranslate]);
+
+  const isAutoTranslateEnabled = localAutoTranslate ?? preferences.auto_translate;
+
+  const toggleAutoTranslate = async () => {
+    const newValue = !isAutoTranslateEnabled;
+    setLocalAutoTranslate(newValue);
+    
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ auto_translate: newValue })
+        .eq('user_id', userData.user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: newValue ? "Auto-translate enabled" : "Auto-translate disabled",
+        description: newValue 
+          ? "Incoming messages will be automatically translated" 
+          : "Messages will be shown in original language",
+      });
+    } catch (error) {
+      // Revert on error
+      setLocalAutoTranslate(!newValue);
+      console.error('Error toggling auto-translate:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update translation settings",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     const initUser = async () => {
@@ -254,7 +299,7 @@ const ChatInterface = ({
       setMessages(messagesWithProfiles);
 
       // Auto-translate incoming messages if enabled
-      if (preferences.auto_translate) {
+      if (isAutoTranslateEnabled) {
         const incomingMessages = messagesWithProfiles.filter(m => m.sender === 'contact' && m.text);
         
         // Translate messages in batches to avoid overwhelming the API
@@ -326,13 +371,13 @@ const ChatInterface = ({
                 audioData: newMsg.audio_data || undefined,
                 transcription: newMsg.transcription || undefined,
                 isEdited: !!newMsg.updated_at,
-                isTranslating: isFromOther && preferences.auto_translate,
+                isTranslating: isFromOther && isAutoTranslateEnabled,
               },
             ];
           });
 
           // Auto-translate incoming messages if enabled
-          if (isFromOther && preferences.auto_translate && messageText) {
+          if (isFromOther && isAutoTranslateEnabled && messageText) {
             const translatedText = await autoTranslateIncoming(messageText, newMsg.id);
             if (translatedText) {
               setMessages(prev => prev.map(m => 
@@ -741,14 +786,28 @@ const handleDeleteMessage = async (messageId: string) => {
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <span className="w-2 h-2 bg-accent rounded-full" />
                 {isGroup ? 'Group Chat' : 'Online'} · Encrypted
-                {preferences.auto_translate && (
-                  <span className="flex items-center gap-1 ml-1 text-primary">
-                    · <Languages className="w-3 h-3" /> Auto-translate
-                  </span>
-                )}
               </p>
             </div>
           </div>
+          
+          {/* Auto-translate toggle */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-muted/50">
+                  <Languages className={cn("w-4 h-4", isAutoTranslateEnabled ? "text-primary" : "text-muted-foreground")} />
+                  <Switch
+                    checked={isAutoTranslateEnabled}
+                    onCheckedChange={toggleAutoTranslate}
+                    className="data-[state=checked]:bg-primary"
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isAutoTranslateEnabled ? 'Disable' : 'Enable'} auto-translation</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button
             variant="ghost"
             size="icon"
