@@ -11,7 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Star, Archive, Trash2 } from "lucide-react";
+import { Star, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SwipeableContactItemProps {
@@ -20,6 +20,7 @@ interface SwipeableContactItemProps {
     contact_user_id: string;
     contact_name: string | null;
     is_favourite: boolean;
+    notification_sound_enabled?: boolean;
     profiles: {
       display_name: string | null;
       status: string | null;
@@ -33,7 +34,7 @@ interface SwipeableContactItemProps {
   unreadCount: number;
   onStartChat: () => void;
   onToggleFavourite: (e: React.MouseEvent) => void;
-  onArchive: () => void;
+  onToggleSound: () => void;
   onDelete: () => void;
 }
 
@@ -49,7 +50,7 @@ const SwipeableContactItem = ({
   unreadCount,
   onStartChat,
   onToggleFavourite,
-  onArchive,
+  onToggleSound,
   onDelete,
 }: SwipeableContactItemProps) => {
   const [translateX, setTranslateX] = useState(0);
@@ -92,15 +93,17 @@ const SwipeableContactItem = ({
     }
   }, [translateX]);
 
-  const handleActionClick = (action: 'archive' | 'delete') => {
-    if (action === 'archive') {
+  const handleActionClick = (action: 'sound' | 'delete') => {
+    if (action === 'sound') {
       setTranslateX(0);
-      onArchive();
+      onToggleSound();
     } else {
       // Show confirmation dialog for delete
       setShowDeleteConfirm(true);
     }
   };
+
+  const soundEnabled = contact.notification_sound_enabled ?? true;
 
   const confirmDelete = () => {
     setShowDeleteConfirm(false);
@@ -142,20 +145,30 @@ const SwipeableContactItem = ({
         ref={containerRef}
         className="relative overflow-hidden border-b border-border/50"
       >
-        {/* Left action (Archive) - shown when swiping right */}
+        {/* Left action (Sound Toggle) - shown when swiping right */}
         <div 
           className={cn(
-            "absolute inset-y-0 left-0 flex items-center justify-start px-4 bg-primary transition-opacity",
+            "absolute inset-y-0 left-0 flex items-center justify-start px-4 transition-opacity",
+            soundEnabled ? "bg-amber-500" : "bg-primary",
             translateX > 20 ? "opacity-100" : "opacity-0"
           )}
           style={{ width: MAX_SWIPE }}
         >
           <button
-            onClick={() => handleActionClick('archive')}
-            className="flex flex-col items-center gap-1 text-primary-foreground"
+            onClick={() => handleActionClick('sound')}
+            className="flex flex-col items-center gap-1 text-white"
           >
-            <Archive className="w-6 h-6" />
-            <span className="text-xs font-medium">Archive</span>
+            {soundEnabled ? (
+              <>
+                <VolumeX className="w-6 h-6" />
+                <span className="text-xs font-medium">Mute</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-6 h-6" />
+                <span className="text-xs font-medium">Unmute</span>
+              </>
+            )}
           </button>
         </div>
 

@@ -21,6 +21,7 @@ interface Contact {
   contact_user_id: string;
   contact_name: string | null;
   is_favourite: boolean;
+  notification_sound_enabled?: boolean;
   profiles: {
     display_name: string | null;
     status: string | null;
@@ -77,6 +78,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'favourites' | 'groups'>('all');
   const [showAIChat, setShowAIChat] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
+  const [globalSoundEnabled, setGlobalSoundEnabled] = useState(true);
   const { toast } = useToast();
 
   const currentUserIdRef = useRef<string | null>(null);
@@ -86,6 +88,15 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
         currentUserIdRef.current = userData.user.id;
+        
+        // Fetch global sound setting
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('notification_sound_enabled')
+          .eq('user_id', userData.user.id)
+          .single();
+        
+        setGlobalSoundEnabled(profileData?.notification_sound_enabled ?? true);
       }
     };
     initUser();
@@ -110,10 +121,29 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
           // Refresh unread counts when a new message arrives
           fetchUnreadCounts();
           
-          // Play notification sound if message is from someone else
-          const newMessage = payload.new as { sender_id: string };
-          if (newMessage.sender_id !== currentUserIdRef.current) {
-            playNotificationSound();
+          // Play notification sound if message is from someone else and sounds are enabled
+          const newMessage = payload.new as { sender_id: string; conversation_id: string };
+          if (newMessage.sender_id !== currentUserIdRef.current && globalSoundEnabled) {
+            // Find the contact to check their sound setting
+            const contact = contacts.find(c => 
+              conversationMap[c.contact_user_id] === newMessage.conversation_id
+            );
+            
+            // Check if this is a group message
+            const group = groups.find(g => g.id === newMessage.conversation_id);
+            
+            // For contacts, check per-contact sound setting
+            if (contact && contact.notification_sound_enabled !== false) {
+              playNotificationSound();
+            } 
+            // For groups, check muted setting  
+            else if (group && !group.is_muted) {
+              playNotificationSound();
+            }
+            // If no contact or group found but not from self, still play
+            else if (!contact && !group) {
+              playNotificationSound();
+            }
           }
         }
       )
@@ -134,7 +164,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [globalSoundEnabled, contacts, groups, conversationMap]);
 
   const fetchUnreadCounts = async () => {
     try {
@@ -168,7 +198,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
 
     const { data, error } = await supabase
       .from('contacts')
-      .select('*')
+      .select('*, notification_sound_enabled')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -211,6 +241,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
           return {
             ...contact,
             is_favourite: contact.is_favourite || false,
+            notification_sound_enabled: contact.notification_sound_enabled ?? true,
             profiles: profile?.[0] || {
               display_name: null,
               status: null,
@@ -463,60 +494,44 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     }
   };
 
-  const archiveContact = async (contactId: string, contactName: string) => {
-    // Find the contact before removing it (for undo)
-    const contactToArchive = contacts.find(c => c.id === contactId);
-    if (!contactToArchive) return;
+  const toggleContactSound = async (contactId: string, contactUserId: string) => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
 
-    // Optimistically remove from UI
-    setContacts(prev => prev.filter(c => c.id !== contactId));
+    const contact = contacts.find(c => c.id === contactId);
+    const newSoundState = !(contact?.notification_sound_enabled ?? true);
 
-    // Show toast with undo action
-    toast({
-      title: 'Contact archived',
-      description: `${contactName} has been archived`,
-      action: (
-        <button
-          onClick={async () => {
-            // Restore the contact
-            const { error } = await supabase
-              .from('contacts')
-              .insert({
-                id: contactToArchive.id,
-                user_id: (await supabase.auth.getUser()).data.user?.id,
-                contact_user_id: contactToArchive.contact_user_id,
-                contact_name: contactToArchive.contact_name,
-                is_favourite: contactToArchive.is_favourite,
-              });
+    // Optimistically update UI
+    setContacts(prev => 
+      prev.map(c => c.id === contactId ? { ...c, notification_sound_enabled: newSoundState } : c)
+    );
 
-            if (!error) {
-              setContacts(prev => [...prev, contactToArchive]);
-              toast({ title: 'Contact restored' });
-            }
-          }}
-          className="px-3 py-1 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-        >
-          Undo
-        </button>
-      ),
-    });
-
-    // Actually delete from database
+    // Persist to database
     const { error } = await supabase
       .from('contacts')
-      .delete()
+      .update({ notification_sound_enabled: newSoundState })
       .eq('id', contactId);
 
     if (error) {
-      console.error('Error archiving contact:', error);
-      // Restore on error
-      setContacts(prev => [...prev, contactToArchive]);
+      console.error('Error updating sound setting:', error);
+      // Revert on error
+      setContacts(prev => 
+        prev.map(c => c.id === contactId ? { ...c, notification_sound_enabled: !newSoundState } : c)
+      );
       toast({
         title: 'Error',
-        description: 'Failed to archive contact',
+        description: 'Failed to update notification setting',
         variant: 'destructive',
       });
+      return;
     }
+    
+    toast({
+      title: newSoundState ? 'Sound enabled' : 'Sound muted',
+      description: newSoundState 
+        ? 'You\'ll hear notification sounds from this contact' 
+        : 'Notifications from this contact are now muted',
+    });
   };
 
   const leaveGroup = async (groupId: string, groupName: string) => {
@@ -852,7 +867,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
                     unreadCount={unreadCount}
                     onStartChat={() => onStartChat(contact.contact_user_id, displayName)}
                     onToggleFavourite={(e) => toggleFavourite(contact.id, contact.is_favourite, e)}
-                    onArchive={() => archiveContact(contact.id, displayName)}
+                    onToggleSound={() => toggleContactSound(contact.id, contact.contact_user_id)}
                     onDelete={() => deleteContact(contact.id)}
                   />
                 );

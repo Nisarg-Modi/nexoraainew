@@ -192,6 +192,7 @@ export type Database = {
           created_at: string
           id: string
           is_favourite: boolean | null
+          notification_sound_enabled: boolean | null
           user_id: string
         }
         Insert: {
@@ -200,6 +201,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_favourite?: boolean | null
+          notification_sound_enabled?: boolean | null
           user_id: string
         }
         Update: {
@@ -208,6 +210,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_favourite?: boolean | null
+          notification_sound_enabled?: boolean | null
           user_id?: string
         }
         Relationships: []
@@ -603,6 +606,7 @@ export type Database = {
           display_name: string
           gender: string | null
           id: string
+          notification_sound_enabled: boolean | null
           preferred_language: string | null
           status: string | null
           updated_at: string
@@ -617,6 +621,7 @@ export type Database = {
           display_name: string
           gender?: string | null
           id?: string
+          notification_sound_enabled?: boolean | null
           preferred_language?: string | null
           status?: string | null
           updated_at?: string
@@ -631,6 +636,7 @@ export type Database = {
           display_name?: string
           gender?: string | null
           id?: string
+          notification_sound_enabled?: boolean | null
           preferred_language?: string | null
           status?: string | null
           updated_at?: string
