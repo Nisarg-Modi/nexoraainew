@@ -11,7 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Star, Volume2, VolumeX, Trash2 } from "lucide-react";
+import { Star, Volume2, VolumeX, Trash2, BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SwipeableContactItemProps {
@@ -209,12 +209,16 @@ const SwipeableContactItem = ({
             </AvatarFallback>
           </Avatar>
 
-          {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="font-semibold truncate text-foreground">
-                {displayName} {emoji}
-              </h3>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="font-semibold truncate text-foreground">
+                  {displayName} {emoji}
+                </h3>
+                {!soundEnabled && (
+                  <BellOff className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                )}
+              </div>
               <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                 <span className="text-xs text-muted-foreground">
                   {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
