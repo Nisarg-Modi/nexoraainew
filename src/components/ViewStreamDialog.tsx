@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle2, Send, Loader2, Trash2, Users, Image, Video, X, Play } from "lucide-react";
+import { CheckCircle2, Send, Loader2, Trash2, Users, Image, Video, X, Play, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -27,6 +27,12 @@ interface StreamPost {
   media_url: string | null;
   media_type: string;
   created_at: string;
+}
+
+interface PostReaction {
+  post_id: string;
+  count: number;
+  userReacted: boolean;
 }
 
 interface ViewStreamDialogProps {
@@ -55,6 +61,7 @@ export const ViewStreamDialog = ({
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [reactions, setReactions] = useState<Record<string, PostReaction>>({});
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
@@ -72,10 +79,39 @@ export const ViewStreamDialog = ({
 
       if (error) throw error;
       setPosts(data || []);
+      
+      // Fetch reactions for all posts
+      if (data && data.length > 0) {
+        await fetchReactions(data.map(p => p.id));
+      }
     } catch (error) {
       console.error("Error fetching posts:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchReactions = async (postIds: string[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('stream_post_reactions')
+        .select('post_id, user_id')
+        .in('post_id', postIds);
+
+      if (error) throw error;
+
+      const reactionMap: Record<string, PostReaction> = {};
+      postIds.forEach(id => {
+        const postReactions = data?.filter(r => r.post_id === id) || [];
+        reactionMap[id] = {
+          post_id: id,
+          count: postReactions.length,
+          userReacted: postReactions.some(r => r.user_id === user?.id)
+        };
+      });
+      setReactions(reactionMap);
+    } catch (error) {
+      console.error("Error fetching reactions:", error);
     }
   };
 
@@ -84,6 +120,59 @@ export const ViewStreamDialog = ({
       fetchPosts();
     }
   }, [open, stream]);
+
+  const handleReaction = async (postId: string) => {
+    if (!user) {
+      toast.error("Please sign in to react");
+      return;
+    }
+
+    const currentReaction = reactions[postId];
+    
+    try {
+      if (currentReaction?.userReacted) {
+        // Remove reaction
+        await supabase
+          .from('stream_post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
+        setReactions(prev => ({
+          ...prev,
+          [postId]: {
+            ...prev[postId],
+            count: Math.max(0, (prev[postId]?.count || 1) - 1),
+            userReacted: false
+          }
+        }));
+      } else {
+        // Add reaction
+        await supabase
+          .from('stream_post_reactions')
+          .insert({
+            post_id: postId,
+            user_id: user.id,
+            emoji: '❤️'
+          });
+
+        setReactions(prev => ({
+          ...prev,
+          [postId]: {
+            ...prev[postId],
+            count: (prev[postId]?.count || 0) + 1,
+            userReacted: true
+          }
+        }));
+      }
+    } catch (error: any) {
+      console.error("Error toggling reaction:", error);
+      // Don't show error for duplicate key (race condition)
+      if (!error.message?.includes('duplicate')) {
+        toast.error("Failed to update reaction");
+      }
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
     const file = e.target.files?.[0];
@@ -272,44 +361,60 @@ export const ViewStreamDialog = ({
             </div>
           ) : (
             <div className="space-y-4">
-              {posts.map((post) => (
-                <div key={post.id} className="bg-muted/30 rounded-lg p-4 group">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      {post.content && (
-                        <p className="text-foreground whitespace-pre-wrap mb-2">{post.content}</p>
-                      )}
-                      {post.media_url && post.media_type === 'image' && (
-                        <img 
-                          src={post.media_url} 
-                          alt="Post media" 
-                          className="rounded-lg max-h-64 w-auto object-cover"
-                        />
-                      )}
-                      {post.media_url && post.media_type === 'video' && (
-                        <video 
-                          src={post.media_url} 
-                          controls 
-                          className="rounded-lg max-h-64 w-full"
-                        />
+              {posts.map((post) => {
+                const postReaction = reactions[post.id];
+                return (
+                  <div key={post.id} className="bg-muted/30 rounded-lg p-4 group">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        {post.content && (
+                          <p className="text-foreground whitespace-pre-wrap mb-2">{post.content}</p>
+                        )}
+                        {post.media_url && post.media_type === 'image' && (
+                          <img 
+                            src={post.media_url} 
+                            alt="Post media" 
+                            className="rounded-lg max-h-64 w-auto object-cover"
+                          />
+                        )}
+                        {post.media_url && post.media_type === 'video' && (
+                          <video 
+                            src={post.media_url} 
+                            controls 
+                            className="rounded-lg max-h-64 w-full"
+                          />
+                        )}
+                      </div>
+                      {isOwner && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+                          onClick={() => handleDeletePost(post.id, post.media_url)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       )}
                     </div>
-                    {isOwner && (
+                    <div className="flex items-center justify-between mt-3">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
-                        onClick={() => handleDeletePost(post.id, post.media_url)}
+                        size="sm"
+                        className={`h-7 px-2 gap-1.5 ${postReaction?.userReacted ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-red-500'}`}
+                        onClick={() => handleReaction(post.id)}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Heart className={`h-4 w-4 ${postReaction?.userReacted ? 'fill-current' : ''}`} />
+                        {(postReaction?.count || 0) > 0 && (
+                          <span className="text-xs">{postReaction?.count}</span>
+                        )}
                       </Button>
-                    )}
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </ScrollArea>
