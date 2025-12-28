@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, MoreVertical, CheckCircle2, Play, Loader2, Users, LogOut } from "lucide-react";
+import { Search, MoreVertical, CheckCircle2, Play, Loader2, Users, LogOut, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +10,11 @@ import { CreateMomentDialog } from "./CreateMomentDialog";
 import { ViewMomentDialog } from "./ViewMomentDialog";
 import { CreateCommunityDialog } from "./CreateCommunityDialog";
 import { ExploreCommunities } from "./ExploreCommunities";
+import { CreateStreamDialog } from "./CreateStreamDialog";
+import { ExploreStreams } from "./ExploreStreams";
+import { ViewStreamDialog } from "./ViewStreamDialog";
 import { useCommunities } from "@/hooks/useCommunities";
+import { useStreams } from "@/hooks/useStreams";
 import { toast } from "sonner";
 
 interface Moment {
@@ -36,34 +40,17 @@ interface GroupedMoments {
   isOwn: boolean;
 }
 
-interface StreamItem {
-  id: string;
-  name: string;
-  avatarUrl?: string;
-  followers: string;
-  isVerified?: boolean;
-  isFollowing?: boolean;
-}
-
-// Mock data for Streams (can be made dynamic later)
-const mockStreams: StreamItem[] = [
-  { id: "1", name: "Tech Updates", followers: "610K", isVerified: true, isFollowing: false },
-  { id: "2", name: "Daily Insights", followers: "8.2M", isVerified: true, isFollowing: false },
-  { id: "3", name: "Creative Corner", followers: "121K", isVerified: true, isFollowing: false },
-  { id: "4", name: "Mindful Living", followers: "7.9M", isVerified: true, isFollowing: false },
-  { id: "5", name: "News Flash", followers: "613K", isVerified: true, isFollowing: false },
-  { id: "6", name: "Sports Central", followers: "354K", isVerified: true, isFollowing: false },
-];
-
 export const UpdatesView = () => {
-  const [followingStreams, setFollowingStreams] = useState<Set<string>>(new Set());
   const [groupedMoments, setGroupedMoments] = useState<GroupedMoments[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedMoments, setSelectedMoments] = useState<Moment[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedStream, setSelectedStream] = useState<any>(null);
+  const [streamDialogOpen, setStreamDialogOpen] = useState(false);
   const { user } = useAuth();
   const { memberships, isLoading: isLoadingCommunities, refetch: refetchCommunities, leaveCommunity, joinedCommunityIds } = useCommunities();
+  const { allStreams, isLoading: isLoadingStreams, refetch: refetchStreams, followStream, unfollowStream, followedStreamIds } = useStreams();
 
   const fetchMoments = async () => {
     if (!user) return;
@@ -147,16 +134,27 @@ export const UpdatesView = () => {
     };
   }, [user]);
 
-  const handleFollowStream = (streamId: string) => {
-    setFollowingStreams(prev => {
-      const next = new Set(prev);
-      if (next.has(streamId)) {
-        next.delete(streamId);
-      } else {
-        next.add(streamId);
-      }
-      return next;
-    });
+  const handleFollowStream = async (streamId: string) => {
+    const success = await followStream(streamId);
+    if (success) {
+      toast.success("Following stream!");
+    } else {
+      toast.error("Failed to follow stream");
+    }
+  };
+
+  const handleUnfollowStream = async (streamId: string) => {
+    const success = await unfollowStream(streamId);
+    if (success) {
+      toast.success("Unfollowed stream");
+    } else {
+      toast.error("Failed to unfollow stream");
+    }
+  };
+
+  const handleStreamClick = (stream: any) => {
+    setSelectedStream(stream);
+    setStreamDialogOpen(true);
   };
 
   const handleMomentClick = (group: GroupedMoments) => {
@@ -323,21 +321,77 @@ export const UpdatesView = () => {
           <section className="py-4">
             <div className="flex items-center justify-between px-4 mb-1">
               <h2 className="text-base font-semibold text-foreground">Streams</h2>
-              <Button variant="ghost" size="sm" className="text-primary text-sm font-medium h-8 px-3">
-                Explore
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground px-4 mb-3">Find streams to follow</p>
-            <div className="space-y-0">
-              {mockStreams.map((stream) => (
-                <StreamCard 
-                  key={stream.id} 
-                  stream={stream} 
-                  isFollowing={followingStreams.has(stream.id)}
-                  onFollow={() => handleFollowStream(stream.id)}
+              <div className="flex items-center gap-2">
+                <CreateStreamDialog onStreamCreated={refetchStreams} />
+                <ExploreStreams 
+                  onFollowed={refetchStreams}
+                  followedStreamIds={followedStreamIds}
                 />
-              ))}
+              </div>
             </div>
+            <p className="text-sm text-muted-foreground px-4 mb-3">Broadcast channels you follow</p>
+            
+            {isLoadingStreams ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : allStreams.filter(s => s.isFollowing || s.isOwner).length === 0 ? (
+              <div className="px-4 py-6 text-center">
+                <Radio className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  You're not following any streams yet
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Create one or explore to find streams
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-0">
+                {allStreams.filter(s => s.isFollowing || s.isOwner).map((stream) => (
+                  <div
+                    key={stream.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                    onClick={() => handleStreamClick(stream)}
+                  >
+                    <Avatar className="w-12 h-12 rounded-full">
+                      <AvatarImage src={stream.avatar_url || ""} />
+                      <AvatarFallback className="bg-primary/20 text-primary text-sm font-semibold">
+                        {getInitials(stream.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="font-medium text-foreground truncate">{stream.name}</h3>
+                        {stream.is_verified && (
+                          <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 fill-primary stroke-primary-foreground" />
+                        )}
+                        {stream.isOwner && (
+                          <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {formatFollowers(stream.follower_count)} followers
+                      </p>
+                    </div>
+                    {!stream.isOwner && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUnfollowStream(stream.id);
+                        }}
+                        className="rounded-full"
+                      >
+                        Following
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       </ScrollArea>
@@ -349,8 +403,28 @@ export const UpdatesView = () => {
         onOpenChange={setViewDialogOpen}
         onMomentDeleted={fetchMoments}
       />
+
+      <ViewStreamDialog
+        stream={selectedStream}
+        open={streamDialogOpen}
+        onOpenChange={setStreamDialogOpen}
+        isOwner={selectedStream?.isOwner || false}
+        isFollowing={selectedStream?.isFollowing || false}
+        onFollow={() => selectedStream && handleFollowStream(selectedStream.id)}
+        onUnfollow={() => selectedStream && handleUnfollowStream(selectedStream.id)}
+      />
     </div>
   );
+};
+
+const formatFollowers = (count: number) => {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
+  return count.toString();
 };
 
 const MomentCard = ({ group, onClick }: { group: GroupedMoments; onClick: () => void }) => {
@@ -396,58 +470,6 @@ const MomentCard = ({ group, onClick }: { group: GroupedMoments; onClick: () => 
       <span className="text-xs text-muted-foreground text-center truncate w-16 group-hover:text-foreground transition-colors">
         {group.isOwn ? "Your story" : group.displayName}
       </span>
-    </div>
-  );
-};
-
-const StreamCard = ({ 
-  stream, 
-  isFollowing, 
-  onFollow 
-}: { 
-  stream: StreamItem; 
-  isFollowing: boolean;
-  onFollow: () => void;
-}) => {
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors">
-      <Avatar className="w-12 h-12 rounded-full">
-        <AvatarImage src={stream.avatarUrl} />
-        <AvatarFallback className="bg-primary/20 text-primary text-sm font-semibold">
-          {getInitials(stream.name)}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <h3 className="font-medium text-foreground truncate">{stream.name}</h3>
-          {stream.isVerified && (
-            <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 fill-primary stroke-primary-foreground" />
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground">{stream.followers} followers</p>
-      </div>
-      <Button
-        variant={isFollowing ? "secondary" : "default"}
-        size="sm"
-        onClick={onFollow}
-        className={cn(
-          "h-8 px-4 text-sm font-medium rounded-full",
-          isFollowing 
-            ? "bg-muted text-foreground hover:bg-muted/80" 
-            : "bg-primary text-primary-foreground hover:bg-primary/90"
-        )}
-      >
-        {isFollowing ? "Following" : "Follow"}
-      </Button>
     </div>
   );
 };
