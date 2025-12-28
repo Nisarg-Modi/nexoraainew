@@ -13,6 +13,12 @@ interface TranslationResult {
   targetLanguage: string;
 }
 
+interface LanguageDetectionResult {
+  languageCode: string;
+  languageName: string;
+  confidence: string;
+}
+
 export const useAutoTranslate = () => {
   const [translating, setTranslating] = useState(false);
   const [preferences, setPreferences] = useState<LanguagePreferences>({
@@ -21,6 +27,7 @@ export const useAutoTranslate = () => {
     auto_translate: false,
   });
   const [translationCache, setTranslationCache] = useState<Map<string, string>>(new Map());
+  const [languageCache, setLanguageCache] = useState<Map<string, LanguageDetectionResult>>(new Map());
 
   const fetchPreferences = useCallback(async () => {
     try {
@@ -81,6 +88,44 @@ export const useAutoTranslate = () => {
     }
   }, [translationCache]);
 
+  const detectLanguage = useCallback(async (
+    text: string,
+    messageId?: string
+  ): Promise<LanguageDetectionResult | null> => {
+    if (!text.trim()) return null;
+
+    // Check cache first
+    const cacheKey = messageId || text.substring(0, 100);
+    const cached = languageCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('detect-language', {
+        body: { text }
+      });
+
+      if (error) throw error;
+
+      if (data?.languageCode) {
+        const result: LanguageDetectionResult = {
+          languageCode: data.languageCode,
+          languageName: data.languageName || data.languageCode,
+          confidence: data.confidence || 'medium'
+        };
+        
+        // Cache the detection result
+        setLanguageCache(prev => new Map(prev).set(cacheKey, result));
+        return result;
+      }
+      return null;
+    } catch (error) {
+      console.error('Language detection error:', error);
+      return null;
+    }
+  }, [languageCache]);
+
   const autoTranslateIncoming = useCallback(async (
     text: string, 
     messageId?: string
@@ -110,8 +155,10 @@ export const useAutoTranslate = () => {
     translating,
     fetchPreferences,
     translateText,
+    detectLanguage,
     autoTranslateIncoming,
     translateOutgoing,
     translationCache,
+    languageCache,
   };
 };

@@ -28,6 +28,10 @@ interface Message {
   id: string;
   text: string;
   translatedText?: string;
+  detectedLanguage?: {
+    code: string;
+    name: string;
+  };
   sender: "user" | "ai" | "contact";
   senderId?: string;
   senderName?: string;
@@ -38,6 +42,7 @@ interface Message {
   transcription?: string;
   isEdited?: boolean;
   isTranslating?: boolean;
+  isDetecting?: boolean;
 }
 
 const ChatInterface = ({ 
@@ -73,7 +78,7 @@ const ChatInterface = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { setTyping } = useTypingIndicator(conversationId, currentUserId);
-  const { preferences, fetchPreferences, autoTranslateIncoming, translating } = useAutoTranslate();
+  const { preferences, fetchPreferences, autoTranslateIncoming, detectLanguage, translating } = useAutoTranslate();
   const [localAutoTranslate, setLocalAutoTranslate] = useState<boolean | null>(null);
   
   // Sync local state with preferences
@@ -298,12 +303,23 @@ const ChatInterface = ({
       
       setMessages(messagesWithProfiles);
 
-      // Auto-translate incoming messages if enabled
-      if (isAutoTranslateEnabled) {
-        const incomingMessages = messagesWithProfiles.filter(m => m.sender === 'contact' && m.text);
-        
-        // Translate messages in batches to avoid overwhelming the API
-        for (const msg of incomingMessages.slice(-10)) { // Only translate last 10 messages for performance
+      // Detect language and auto-translate incoming messages
+      const incomingMessages = messagesWithProfiles.filter(m => m.sender === 'contact' && m.text);
+      
+      // Process messages in batches to avoid overwhelming the API
+      for (const msg of incomingMessages.slice(-10)) {
+        // Detect language for incoming messages
+        const langResult = await detectLanguage(msg.text, msg.id);
+        if (langResult) {
+          setMessages(prev => prev.map(m => 
+            m.id === msg.id 
+              ? { ...m, detectedLanguage: { code: langResult.languageCode, name: langResult.languageName } }
+              : m
+          ));
+        }
+
+        // Auto-translate if enabled
+        if (isAutoTranslateEnabled) {
           const translatedText = await autoTranslateIncoming(msg.text, msg.id);
           if (translatedText) {
             setMessages(prev => prev.map(m => 
@@ -372,9 +388,26 @@ const ChatInterface = ({
                 transcription: newMsg.transcription || undefined,
                 isEdited: !!newMsg.updated_at,
                 isTranslating: isFromOther && isAutoTranslateEnabled,
+                isDetecting: isFromOther,
               },
             ];
           });
+
+          // Detect language for incoming messages
+          if (isFromOther && messageText) {
+            const langResult = await detectLanguage(messageText, newMsg.id);
+            if (langResult) {
+              setMessages(prev => prev.map(m => 
+                m.id === newMsg.id 
+                  ? { ...m, detectedLanguage: { code: langResult.languageCode, name: langResult.languageName }, isDetecting: false }
+                  : m
+              ));
+            } else {
+              setMessages(prev => prev.map(m => 
+                m.id === newMsg.id ? { ...m, isDetecting: false } : m
+              ));
+            }
+          }
 
           // Auto-translate incoming messages if enabled
           if (isFromOther && isAutoTranslateEnabled && messageText) {
@@ -1281,7 +1314,7 @@ const MessageBubble = ({
                       <p className="text-sm">{message.translatedText}</p>
                       <p className="text-xs opacity-50 italic flex items-center gap-1">
                         <Languages className="w-3 h-3" />
-                        Original: {message.text}
+                        Original ({message.detectedLanguage?.name || 'Unknown'}): {message.text}
                       </p>
                     </>
                   ) : (
@@ -1289,13 +1322,27 @@ const MessageBubble = ({
                   )}
                 </div>
               )}
-              <p className="text-xs opacity-70 mt-1 flex items-center gap-1">
-                {message.timestamp.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-                {message.isEdited && <span className="italic">(edited)</span>}
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs opacity-70 flex items-center gap-1">
+                  {message.timestamp.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  {message.isEdited && <span className="italic">(edited)</span>}
+                </p>
+                {!isUser && message.detectedLanguage && !message.translatedText && (
+                  <span className="text-xs bg-muted/50 text-muted-foreground px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Languages className="w-2.5 h-2.5" />
+                    {message.detectedLanguage.name}
+                  </span>
+                )}
+                {!isUser && message.isDetecting && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Languages className="w-2.5 h-2.5 animate-pulse" />
+                    Detecting...
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <MessageReactions messageId={message.id} currentUserId={currentUserId} />
