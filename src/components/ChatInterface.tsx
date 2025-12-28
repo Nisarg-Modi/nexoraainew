@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Send, Sparkles, Languages, Smile, Mic, Phone, Video, Shield, Bot, Settings, MoreVertical, LogOut, Trash2, Pencil, Check, X } from "lucide-react";
@@ -20,10 +20,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useAutoTranslate } from "@/hooks/useAutoTranslate";
 
 interface Message {
   id: string;
   text: string;
+  translatedText?: string;
   sender: "user" | "ai" | "contact";
   senderId?: string;
   senderName?: string;
@@ -33,6 +35,7 @@ interface Message {
   audioData?: string;
   transcription?: string;
   isEdited?: boolean;
+  isTranslating?: boolean;
 }
 
 const ChatInterface = ({ 
@@ -68,16 +71,19 @@ const ChatInterface = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { setTyping } = useTypingIndicator(conversationId, currentUserId);
+  const { preferences, fetchPreferences, autoTranslateIncoming, translating } = useAutoTranslate();
 
   useEffect(() => {
     const initUser = async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
         setCurrentUserId(userData.user.id);
+        // Fetch language preferences
+        fetchPreferences();
       }
     };
     initUser();
-  }, []);
+  }, [fetchPreferences]);
 
   useEffect(() => {
     if (isGroup && providedConversationId) {
@@ -226,13 +232,14 @@ const ChatInterface = ({
       setProfilesCache(newCache);
 
       // Map messages with cached profiles
-      const messagesWithProfiles = data.map((msg) => {
+      const messagesWithProfiles: Message[] = data.map((msg) => {
         const senderName = newCache.get(msg.sender_id) || 'Unknown';
+        const isFromOther = msg.sender_id !== currentUserId;
 
         return {
           id: msg.id,
           text: msg.content || msg.transcription || '',
-          sender: msg.sender_id === currentUserId ? 'user' : 'contact',
+          sender: isFromOther ? 'contact' : 'user',
           senderId: msg.sender_id,
           senderName,
           timestamp: new Date(msg.created_at),
@@ -241,10 +248,25 @@ const ChatInterface = ({
           audioData: msg.audio_data || undefined,
           transcription: msg.transcription || undefined,
           isEdited: !!(msg as any).updated_at,
-        } as Message;
+        };
       });
       
       setMessages(messagesWithProfiles);
+
+      // Auto-translate incoming messages if enabled
+      if (preferences.auto_translate) {
+        const incomingMessages = messagesWithProfiles.filter(m => m.sender === 'contact' && m.text);
+        
+        // Translate messages in batches to avoid overwhelming the API
+        for (const msg of incomingMessages.slice(-10)) { // Only translate last 10 messages for performance
+          const translatedText = await autoTranslateIncoming(msg.text, msg.id);
+          if (translatedText) {
+            setMessages(prev => prev.map(m => 
+              m.id === msg.id ? { ...m, translatedText } : m
+            ));
+          }
+        }
+      }
     }
   };
 
@@ -280,6 +302,10 @@ const ChatInterface = ({
             setProfilesCache(prev => new Map(prev).set(newMsg.sender_id, senderName!));
           }
 
+          const messageText = newMsg.content || newMsg.transcription || '';
+          const isFromOther = newMsg.sender_id !== currentUserId;
+
+          // Add message first, then translate if needed
           setMessages((prev) => {
             // Avoid duplicate messages
             if (prev.some(m => m.id === newMsg.id)) {
@@ -290,8 +316,8 @@ const ChatInterface = ({
               ...prev,
               {
                 id: newMsg.id,
-                text: newMsg.content || newMsg.transcription || '',
-                sender: newMsg.sender_id === currentUserId ? 'user' : 'contact',
+                text: messageText,
+                sender: isFromOther ? 'contact' : 'user',
                 senderId: newMsg.sender_id,
                 senderName: senderName || 'Unknown',
                 timestamp: new Date(newMsg.created_at),
@@ -300,9 +326,29 @@ const ChatInterface = ({
                 audioData: newMsg.audio_data || undefined,
                 transcription: newMsg.transcription || undefined,
                 isEdited: !!newMsg.updated_at,
+                isTranslating: isFromOther && preferences.auto_translate,
               },
             ];
           });
+
+          // Auto-translate incoming messages if enabled
+          if (isFromOther && preferences.auto_translate && messageText) {
+            const translatedText = await autoTranslateIncoming(messageText, newMsg.id);
+            if (translatedText) {
+              setMessages(prev => prev.map(m => 
+                m.id === newMsg.id 
+                  ? { ...m, translatedText, isTranslating: false }
+                  : m
+              ));
+            } else {
+              // Remove translating state if translation failed
+              setMessages(prev => prev.map(m => 
+                m.id === newMsg.id 
+                  ? { ...m, isTranslating: false }
+                  : m
+              ));
+            }
+          }
         }
       )
       .subscribe();
@@ -694,7 +740,12 @@ const handleDeleteMessage = async (messageId: string) => {
               <h2 className="font-semibold">{contactName}</h2>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <span className="w-2 h-2 bg-accent rounded-full" />
-                {isGroup ? 'Group Chat' : 'Online'} · Encrypted Connection
+                {isGroup ? 'Group Chat' : 'Online'} · Encrypted
+                {preferences.auto_translate && (
+                  <span className="flex items-center gap-1 ml-1 text-primary">
+                    · <Languages className="w-3 h-3" /> Auto-translate
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -1160,7 +1211,24 @@ const MessageBubble = ({
                   </div>
                 </div>
               ) : (
-                <p className="text-sm">{message.text}</p>
+                <div className="space-y-1">
+                  {message.isTranslating ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Languages className="w-3 h-3 animate-pulse" />
+                      <span className="opacity-70">Translating...</span>
+                    </div>
+                  ) : message.translatedText ? (
+                    <>
+                      <p className="text-sm">{message.translatedText}</p>
+                      <p className="text-xs opacity-50 italic flex items-center gap-1">
+                        <Languages className="w-3 h-3" />
+                        Original: {message.text}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm">{message.text}</p>
+                  )}
+                </div>
               )}
               <p className="text-xs opacity-70 mt-1 flex items-center gap-1">
                 {message.timestamp.toLocaleTimeString([], {
