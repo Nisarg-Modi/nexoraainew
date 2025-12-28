@@ -175,34 +175,54 @@ export const LanguageSettings = () => {
         </Sheet>
       </div>
       
-      {/* Send Language */}
-      <div className="space-y-2">
-        <Label htmlFor="send-language" className="text-sm font-medium">
-          Send messages in
-        </Label>
-        <Select
-          value={settings.send_language}
-          onValueChange={(value) => updateSettings({ send_language: value })}
+      {/* Default Send Language Toggle */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <Label htmlFor="send-language-enabled" className="text-base">
+            Default send language
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            Set a default language for composing messages
+          </p>
+        </div>
+        <Switch
+          id="send-language-enabled"
+          checked={settings.send_language !== null && settings.send_language !== ''}
+          onCheckedChange={(checked) => updateSettings({ send_language: checked ? 'en' : '' })}
           disabled={saving}
-        >
-          <SelectTrigger id="send-language" className="w-full bg-background">
-            <SelectValue placeholder="Select language" />
-          </SelectTrigger>
-          <SelectContent>
-            {LANGUAGES.map((lang) => (
-              <SelectItem key={lang.code} value={lang.code}>
-                <span className="flex items-center gap-2">
-                  <span>{lang.flag}</span>
-                  <span>{lang.name}</span>
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          Your default language for composing messages
-        </p>
+        />
       </div>
+
+      {/* Send Language Selector */}
+      {settings.send_language && (
+        <div className="space-y-2 pt-2 border-t border-border/50">
+          <Label htmlFor="send-language" className="text-sm font-medium">
+            Send messages in
+          </Label>
+          <Select
+            value={settings.send_language}
+            onValueChange={(value) => updateSettings({ send_language: value })}
+            disabled={saving}
+          >
+            <SelectTrigger id="send-language" className="w-full bg-background">
+              <SelectValue placeholder="Select language" />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGUAGES.map((lang) => (
+                <SelectItem key={lang.code} value={lang.code}>
+                  <span className="flex items-center gap-2">
+                    <span>{lang.flag}</span>
+                    <span>{lang.name}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Your default language for composing messages
+          </p>
+        </div>
+      )}
 
       {/* Auto-translate toggle */}
       <div className="flex items-center justify-between pt-2">
