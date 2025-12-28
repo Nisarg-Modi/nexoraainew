@@ -5,20 +5,92 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface ChatMessage {
+  role: string;
+  content: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages } = await req.json();
+    const body = await req.json();
+    const { messages } = body;
+    
+    // Validate messages array exists and is an array
+    if (!messages || !Array.isArray(messages)) {
+      console.error("Invalid request: messages must be an array");
+      return new Response(
+        JSON.stringify({ error: 'Invalid request: messages must be an array' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate message count (1-50 messages allowed)
+    if (messages.length === 0 || messages.length > 50) {
+      console.error("Invalid message count:", messages.length);
+      return new Response(
+        JSON.stringify({ error: 'Message count must be between 1 and 50' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate each message structure
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i] as ChatMessage;
+      
+      if (!msg || typeof msg !== 'object') {
+        console.error("Invalid message format at index", i);
+        return new Response(
+          JSON.stringify({ error: 'Invalid message format' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!msg.role || !msg.content) {
+        console.error("Message missing role or content at index", i);
+        return new Response(
+          JSON.stringify({ error: 'Each message must have role and content' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Only allow user and assistant roles from client
+      if (!['user', 'assistant'].includes(msg.role)) {
+        console.error("Invalid message role at index", i, ":", msg.role);
+        return new Response(
+          JSON.stringify({ error: 'Invalid message role. Only user and assistant allowed.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Validate content is a string and not too long (max 10,000 chars per message)
+      if (typeof msg.content !== 'string') {
+        console.error("Message content is not a string at index", i);
+        return new Response(
+          JSON.stringify({ error: 'Message content must be a string' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (msg.content.length > 10000) {
+        console.error("Message content too long at index", i, ":", msg.content.length);
+        return new Response(
+          JSON.stringify({ error: 'Message content too long (max 10,000 characters)' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log("Processing Nexora AI chat request with", messages.length, "messages");
+    console.log("Processing Nexora AI chat request with", messages.length, "validated messages");
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, Send, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -39,6 +40,27 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return;
 
+    // Validate message length on client side
+    if (messageText.length > 10000) {
+      toast({
+        title: 'Message too long',
+        description: 'Please keep your message under 10,000 characters.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Get authenticated session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast({
+        title: 'Please sign in',
+        description: 'You need to be signed in to use Nexora AI.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const userMessage: Message = { role: 'user', content: messageText.trim() };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
@@ -51,7 +73,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ 
           messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content }))
@@ -60,6 +82,12 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        }
+        if (response.status === 402) {
+          throw new Error('Service temporarily unavailable. Please try again later.');
+        }
         throw new Error(errorData.error || 'Failed to get response');
       }
 
@@ -230,6 +258,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
             placeholder="Type your message..."
             className="flex-1 rounded-full"
             disabled={isLoading}
+            maxLength={10000}
           />
           <Button 
             type="submit" 
