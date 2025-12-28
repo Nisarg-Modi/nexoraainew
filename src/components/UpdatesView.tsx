@@ -73,7 +73,7 @@ export const UpdatesView = () => {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h1 className="text-xl font-semibold text-foreground">Updates</h1>
+        <h1 className="text-xl font-semibold text-foreground">Syncs</h1>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="h-9 w-9">
             <Search className="h-5 w-5 text-muted-foreground" />
