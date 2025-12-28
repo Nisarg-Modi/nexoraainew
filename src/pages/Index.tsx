@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Sparkles, Globe, Zap, LogOut, MessageSquare, Search, Crown, FileText, User, Calendar, Mic } from "lucide-react";
+import { Shield, Sparkles, Globe, Zap, LogOut, MessageSquare, Search, Crown, FileText, User, Calendar, Mic, Radio } from "lucide-react";
 import ChatInterface from "@/components/ChatInterface";
 import ContactsList from "@/components/ContactsList";
 import SemanticSearch from "@/components/SemanticSearch";
@@ -16,6 +16,7 @@ import nexoraLogo from "@/assets/nexora-logo.png";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { VoiceProfileManager } from '@/components/VoiceProfileManager';
 import Meetings from '@/pages/Meetings';
+import { UpdatesView } from "@/components/UpdatesView";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'contacts' | 'chat'>('contacts');
@@ -78,10 +79,14 @@ const Index = () => {
           <Tabs defaultValue="contacts" className="w-full">
             {/* Mobile: Scrollable horizontal tabs */}
             <div className="overflow-x-auto pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
-              <TabsList className={`inline-flex sm:grid w-max sm:w-full gap-1 sm:gap-0 mb-4 sm:mb-6 ${isAdmin ? 'sm:grid-cols-8' : 'sm:grid-cols-7'}`}>
+            <TabsList className={`inline-flex sm:grid w-max sm:w-full gap-1 sm:gap-0 mb-4 sm:mb-6 ${isAdmin ? 'sm:grid-cols-9' : 'sm:grid-cols-8'}`}>
                 <TabsTrigger value="contacts" className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
                   <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span className="hidden xs:inline sm:inline">Contacts</span>
+                </TabsTrigger>
+                <TabsTrigger value="updates" className="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
+                  <Radio className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline sm:inline">Updates</span>
                 </TabsTrigger>
                 <TabsTrigger value="meetings" className="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
                   <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -121,6 +126,10 @@ const Index = () => {
                 onStartChat={handleStartChat}
                 onStartGroupChat={handleStartGroupChat}
               />
+            </TabsContent>
+            
+            <TabsContent value="updates" className="min-h-[60vh]">
+              <UpdatesView />
             </TabsContent>
             
             <TabsContent value="meetings">
