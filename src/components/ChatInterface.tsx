@@ -75,6 +75,9 @@ const ChatInterface = ({
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [outgoingLanguage, setOutgoingLanguage] = useState<{ code: string; name: string } | null>(null);
+  const [detectingOutgoing, setDetectingOutgoing] = useState(false);
+  const detectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { setTyping } = useTypingIndicator(conversationId, currentUserId);
@@ -443,6 +446,37 @@ const ChatInterface = ({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Debounced language detection for outgoing messages
+  useEffect(() => {
+    if (detectTimeoutRef.current) {
+      clearTimeout(detectTimeoutRef.current);
+    }
+
+    const text = inputText.trim();
+    if (text.length < 5) {
+      setOutgoingLanguage(null);
+      setDetectingOutgoing(false);
+      return;
+    }
+
+    setDetectingOutgoing(true);
+    detectTimeoutRef.current = setTimeout(async () => {
+      const result = await detectLanguage(text, 'outgoing-detect');
+      if (result) {
+        setOutgoingLanguage({ code: result.languageCode, name: result.languageName });
+      } else {
+        setOutgoingLanguage(null);
+      }
+      setDetectingOutgoing(false);
+    }, 500);
+
+    return () => {
+      if (detectTimeoutRef.current) {
+        clearTimeout(detectTimeoutRef.current);
+      }
+    };
+  }, [inputText, detectLanguage]);
 
   const handleSend = async () => {
     if (!inputText.trim() || !conversationId) return;
@@ -1040,6 +1074,7 @@ const handleDeleteMessage = async (messageId: string) => {
                 if (e.key === "Enter") {
                   setTyping(false);
                   handleSend();
+                  setOutgoingLanguage(null);
                 }
               }}
               onBlur={() => setTyping(false)}
@@ -1079,7 +1114,10 @@ const handleDeleteMessage = async (messageId: string) => {
             disabled={!conversationId}
           />
           <Button
-            onClick={handleSend}
+            onClick={() => {
+              handleSend();
+              setOutgoingLanguage(null);
+            }}
             disabled={!inputText.trim()}
             className="bg-primary hover:bg-primary-glow"
             size="icon"
@@ -1087,10 +1125,25 @@ const handleDeleteMessage = async (messageId: string) => {
             <Send className="w-5 h-5" />
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          <Shield className="w-3 h-3 inline mr-1" />
-          Encrypted in transit · AI-powered suggestions
-        </p>
+        {/* Outgoing language detection indicator */}
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-xs text-muted-foreground text-center flex-1">
+            <Shield className="w-3 h-3 inline mr-1" />
+            Encrypted in transit · AI-powered suggestions
+          </p>
+          {(detectingOutgoing || outgoingLanguage) && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <Languages className={cn("w-3 h-3", detectingOutgoing && "animate-pulse")} />
+              {detectingOutgoing ? (
+                <span className="text-muted-foreground">Detecting...</span>
+              ) : outgoingLanguage ? (
+                <span className="text-primary font-medium">
+                  Writing in {outgoingLanguage.name}
+                </span>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
     </div>
 
