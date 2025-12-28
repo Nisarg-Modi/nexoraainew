@@ -944,6 +944,106 @@ export type Database = {
         }
         Relationships: []
       }
+      stream_followers: {
+        Row: {
+          followed_at: string
+          id: string
+          stream_id: string
+          user_id: string
+        }
+        Insert: {
+          followed_at?: string
+          id?: string
+          stream_id: string
+          user_id: string
+        }
+        Update: {
+          followed_at?: string
+          id?: string
+          stream_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stream_followers_stream_id_fkey"
+            columns: ["stream_id"]
+            isOneToOne: false
+            referencedRelation: "streams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stream_posts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          media_type: string | null
+          media_url: string | null
+          stream_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          stream_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          stream_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stream_posts_stream_id_fkey"
+            columns: ["stream_id"]
+            isOneToOne: false
+            referencedRelation: "streams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      streams: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          follower_count: number | null
+          id: string
+          is_verified: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          follower_count?: number | null
+          id?: string
+          is_verified?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          follower_count?: number | null
+          id?: string
+          is_verified?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_documents: {
         Row: {
           created_at: string | null
