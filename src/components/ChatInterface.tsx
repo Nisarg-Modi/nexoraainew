@@ -83,17 +83,40 @@ const ChatInterface = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { setTyping } = useTypingIndicator(conversationId, currentUserId);
-  const { preferences, fetchPreferences, autoTranslateIncoming, detectLanguage, translating } = useAutoTranslate();
+  const { 
+    preferences, 
+    contactPreferences,
+    fetchPreferences, 
+    fetchContactPreferences,
+    getEffectivePreferences,
+    isAutoTranslateEnabled: checkAutoTranslateEnabled,
+    autoTranslateIncoming, 
+    detectLanguage, 
+    translating 
+  } = useAutoTranslate();
   const [localAutoTranslate, setLocalAutoTranslate] = useState<boolean | null>(null);
   
-  // Sync local state with preferences
+  // Fetch contact-specific preferences when contact changes (for non-group chats)
   useEffect(() => {
-    if (localAutoTranslate === null && preferences.auto_translate !== undefined) {
-      setLocalAutoTranslate(preferences.auto_translate);
+    if (!isGroup && contactUserId) {
+      fetchContactPreferences(contactUserId);
     }
-  }, [preferences.auto_translate, localAutoTranslate]);
+  }, [isGroup, contactUserId, fetchContactPreferences]);
+  
+  // Sync local state with effective preferences (contact prefs override global)
+  useEffect(() => {
+    const effectivePrefs = getEffectivePreferences();
+    if (localAutoTranslate === null && effectivePrefs.auto_translate !== undefined) {
+      setLocalAutoTranslate(effectivePrefs.auto_translate);
+    }
+  }, [getEffectivePreferences, localAutoTranslate, contactPreferences]);
 
-  const isAutoTranslateEnabled = localAutoTranslate ?? preferences.auto_translate;
+  // Reset local state when contact preferences change
+  useEffect(() => {
+    setLocalAutoTranslate(null);
+  }, [contactPreferences]);
+
+  const isAutoTranslateEnabled = localAutoTranslate ?? getEffectivePreferences().auto_translate;
 
   const toggleAutoTranslate = async () => {
     const newValue = !isAutoTranslateEnabled;
@@ -103,19 +126,38 @@ const ChatInterface = ({
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ auto_translate: newValue })
-        .eq('user_id', userData.user.id);
+      // If we have contact preferences, update those; otherwise update global
+      if (!isGroup && contactPreferences) {
+        const { error } = await supabase
+          .from('contact_language_preferences')
+          .update({ auto_translate: newValue })
+          .eq('user_id', userData.user.id)
+          .eq('contact_user_id', contactUserId);
 
-      if (error) throw error;
+        if (error) throw error;
+        
+        // Refresh contact preferences
+        fetchContactPreferences(contactUserId);
+        
+        toast({
+          title: newValue ? "Auto-translate enabled" : "Auto-translate disabled",
+          description: `Translation ${newValue ? 'enabled' : 'disabled'} for this contact`,
+        });
+      } else {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ auto_translate: newValue })
+          .eq('user_id', userData.user.id);
 
-      toast({
-        title: newValue ? "Auto-translate enabled" : "Auto-translate disabled",
-        description: newValue 
-          ? "Incoming messages will be automatically translated" 
-          : "Messages will be shown in original language",
-      });
+        if (error) throw error;
+
+        toast({
+          title: newValue ? "Auto-translate enabled" : "Auto-translate disabled",
+          description: newValue 
+            ? "Incoming messages will be automatically translated" 
+            : "Messages will be shown in original language",
+        });
+      }
     } catch (error) {
       // Revert on error
       setLocalAutoTranslate(!newValue);
