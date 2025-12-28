@@ -1,16 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Search, MoreVertical, CheckCircle2, Play } from "lucide-react";
+import { Search, MoreVertical, CheckCircle2, Play, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { CreateMomentDialog } from "./CreateMomentDialog";
+import { ViewMomentDialog } from "./ViewMomentDialog";
 
-interface MomentItem {
+interface Moment {
   id: string;
-  name: string;
-  avatarUrl?: string;
-  hasVideo?: boolean;
-  isOwn?: boolean;
+  user_id: string;
+  content: string | null;
+  media_url: string | null;
+  media_type: string;
+  created_at: string;
+  expires_at: string;
+  views_count: number;
+  profile?: {
+    display_name: string;
+    avatar_url: string | null;
+  };
+}
+
+interface GroupedMoments {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  moments: Moment[];
+  isOwn: boolean;
 }
 
 interface StreamItem {
@@ -29,17 +48,7 @@ interface HubItem {
   description: string;
 }
 
-// Mock data for demonstration
-const mockMoments: MomentItem[] = [
-  { id: "own", name: "Add moment", isOwn: true },
-  { id: "1", name: "Sarah K.", avatarUrl: "" },
-  { id: "2", name: "Mike T.", avatarUrl: "", hasVideo: true },
-  { id: "3", name: "Emma W.", avatarUrl: "" },
-  { id: "4", name: "John D.", avatarUrl: "" },
-  { id: "5", name: "Lisa M.", avatarUrl: "" },
-  { id: "6", name: "Chris P.", avatarUrl: "" },
-];
-
+// Mock data for Hub and Streams (can be made dynamic later)
 const mockHubs: HubItem[] = [
   { id: "1", name: "Tech Enthusiasts", avatarUrl: "", description: "You joined 'Tech Enthusiasts'" },
   { id: "2", name: "Photography Club", avatarUrl: "", description: "You joined 'Photography Club'" },
@@ -56,6 +65,101 @@ const mockStreams: StreamItem[] = [
 
 export const UpdatesView = () => {
   const [followingStreams, setFollowingStreams] = useState<Set<string>>(new Set());
+  const [groupedMoments, setGroupedMoments] = useState<GroupedMoments[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [selectedMoments, setSelectedMoments] = useState<Moment[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const { user } = useAuth();
+
+  const fetchMoments = async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
+    try {
+      // Fetch non-expired moments
+      const { data: moments, error } = await supabase
+        .from('moments')
+        .select('*')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (!moments || moments.length === 0) {
+        setGroupedMoments([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Get unique user IDs
+      const userIds = [...new Set(moments.map(m => m.user_id))];
+      
+      // Fetch profiles for these users
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, display_name, avatar_url')
+        .in('user_id', userIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+
+      // Attach profiles to moments
+      const momentsWithProfiles = moments.map(m => ({
+        ...m,
+        profile: profileMap.get(m.user_id)
+      }));
+
+      // Group moments by user
+      const grouped = new Map<string, GroupedMoments>();
+      
+      momentsWithProfiles.forEach(moment => {
+        const userId = moment.user_id;
+        if (!grouped.has(userId)) {
+          grouped.set(userId, {
+            userId,
+            displayName: moment.profile?.display_name || "User",
+            avatarUrl: moment.profile?.avatar_url || null,
+            moments: [],
+            isOwn: userId === user.id
+          });
+        }
+        grouped.get(userId)!.moments.push(moment);
+      });
+
+      // Sort: own moments first, then by most recent
+      const sortedGroups = Array.from(grouped.values()).sort((a, b) => {
+        if (a.isOwn) return -1;
+        if (b.isOwn) return 1;
+        return new Date(b.moments[0].created_at).getTime() - new Date(a.moments[0].created_at).getTime();
+      });
+
+      setGroupedMoments(sortedGroups);
+    } catch (error) {
+      console.error("Error fetching moments:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMoments();
+
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel('moments-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'moments' },
+        () => {
+          fetchMoments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const handleFollowStream = (streamId: string) => {
     setFollowingStreams(prev => {
@@ -68,6 +172,15 @@ export const UpdatesView = () => {
       return next;
     });
   };
+
+  const handleMomentClick = (group: GroupedMoments) => {
+    setSelectedMoments(group.moments);
+    setSelectedIndex(0);
+    setViewDialogOpen(true);
+  };
+
+  const ownMoments = groupedMoments.find(g => g.isOwn);
+  const otherMoments = groupedMoments.filter(g => !g.isOwn);
 
   return (
     <div className="flex flex-col h-full">
@@ -91,9 +204,41 @@ export const UpdatesView = () => {
             <h2 className="text-base font-semibold px-4 mb-3 text-foreground">Moments</h2>
             <div className="relative">
               <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
-                {mockMoments.map((moment) => (
-                  <MomentCard key={moment.id} moment={moment} />
+                {/* Add moment button or own moments */}
+                {ownMoments ? (
+                  <MomentCard 
+                    group={ownMoments} 
+                    onClick={() => handleMomentClick(ownMoments)}
+                  />
+                ) : (
+                  <CreateMomentDialog onMomentCreated={fetchMoments} />
+                )}
+                
+                {/* Show add button if user has moments */}
+                {ownMoments && (
+                  <CreateMomentDialog onMomentCreated={fetchMoments} />
+                )}
+                
+                {/* Other users' moments */}
+                {otherMoments.map((group) => (
+                  <MomentCard 
+                    key={group.userId} 
+                    group={group}
+                    onClick={() => handleMomentClick(group)}
+                  />
                 ))}
+
+                {isLoading && (
+                  <div className="flex items-center justify-center min-w-[72px]">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+
+                {!isLoading && groupedMoments.length === 0 && (
+                  <p className="text-sm text-muted-foreground px-2">
+                    No moments yet. Share your first one!
+                  </p>
+                )}
               </div>
             </div>
           </section>
@@ -135,11 +280,19 @@ export const UpdatesView = () => {
           </section>
         </div>
       </ScrollArea>
+
+      <ViewMomentDialog
+        moments={selectedMoments}
+        initialIndex={selectedIndex}
+        open={viewDialogOpen}
+        onOpenChange={setViewDialogOpen}
+        onMomentDeleted={fetchMoments}
+      />
     </div>
   );
 };
 
-const MomentCard = ({ moment }: { moment: MomentItem }) => {
+const MomentCard = ({ group, onClick }: { group: GroupedMoments; onClick: () => void }) => {
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -149,50 +302,38 @@ const MomentCard = ({ moment }: { moment: MomentItem }) => {
       .slice(0, 2);
   };
 
-  if (moment.isOwn) {
-    return (
-      <div className="flex flex-col items-center gap-1.5 min-w-[72px]">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-xl border-2 border-dashed border-primary/40 bg-card flex items-center justify-center">
-            <Avatar className="w-14 h-14 rounded-lg">
-              <AvatarImage src="" />
-              <AvatarFallback className="bg-muted rounded-lg text-muted-foreground text-lg">
-                You
-              </AvatarFallback>
-            </Avatar>
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg">
-            <Plus className="w-4 h-4 text-primary-foreground" />
-          </div>
-        </div>
-        <span className="text-xs text-muted-foreground text-center truncate w-16">
-          Add moment
-        </span>
-      </div>
-    );
-  }
+  const hasMultiple = group.moments.length > 1;
+  const latestMoment = group.moments[0];
 
   return (
-    <div className="flex flex-col items-center gap-1.5 min-w-[72px] cursor-pointer group">
+    <div 
+      className="flex flex-col items-center gap-1.5 min-w-[72px] cursor-pointer group"
+      onClick={onClick}
+    >
       <div className="relative">
         <div className="w-16 h-16 rounded-xl p-0.5 bg-gradient-to-br from-primary via-accent to-secondary">
           <div className="w-full h-full rounded-[10px] bg-card p-0.5">
             <Avatar className="w-full h-full rounded-lg">
-              <AvatarImage src={moment.avatarUrl} className="object-cover" />
+              <AvatarImage src={group.avatarUrl || ""} className="object-cover" />
               <AvatarFallback className="bg-muted rounded-lg text-foreground text-sm font-medium">
-                {getInitials(moment.name)}
+                {getInitials(group.displayName)}
               </AvatarFallback>
             </Avatar>
           </div>
         </div>
-        {moment.hasVideo && (
+        {latestMoment.media_type === "image" && (
           <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-background/80 flex items-center justify-center">
             <Play className="w-2.5 h-2.5 text-foreground fill-foreground" />
           </div>
         )}
+        {hasMultiple && (
+          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-medium flex items-center justify-center">
+            {group.moments.length}
+          </div>
+        )}
       </div>
       <span className="text-xs text-muted-foreground text-center truncate w-16 group-hover:text-foreground transition-colors">
-        {moment.name}
+        {group.isOwn ? "Your story" : group.displayName}
       </span>
     </div>
   );

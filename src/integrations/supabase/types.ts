@@ -641,6 +641,68 @@ export type Database = {
           },
         ]
       }
+      moment_views: {
+        Row: {
+          id: string
+          moment_id: string
+          viewed_at: string
+          viewer_id: string
+        }
+        Insert: {
+          id?: string
+          moment_id: string
+          viewed_at?: string
+          viewer_id: string
+        }
+        Update: {
+          id?: string
+          moment_id?: string
+          viewed_at?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_views_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moments: {
+        Row: {
+          content: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          media_type: string | null
+          media_url: string | null
+          user_id: string
+          views_count: number | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          user_id: string
+          views_count?: number | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          media_type?: string | null
+          media_url?: string | null
+          user_id?: string
+          views_count?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           auto_translate: boolean | null
