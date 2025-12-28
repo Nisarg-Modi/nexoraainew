@@ -2,12 +2,16 @@ import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, MoreVertical, CheckCircle2, Play, Loader2 } from "lucide-react";
+import { Search, MoreVertical, CheckCircle2, Play, Loader2, Users, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { CreateMomentDialog } from "./CreateMomentDialog";
 import { ViewMomentDialog } from "./ViewMomentDialog";
+import { CreateCommunityDialog } from "./CreateCommunityDialog";
+import { ExploreCommunities } from "./ExploreCommunities";
+import { useCommunities } from "@/hooks/useCommunities";
+import { toast } from "sonner";
 
 interface Moment {
   id: string;
@@ -41,19 +45,7 @@ interface StreamItem {
   isFollowing?: boolean;
 }
 
-interface HubItem {
-  id: string;
-  name: string;
-  avatarUrl?: string;
-  description: string;
-}
-
-// Mock data for Hub and Streams (can be made dynamic later)
-const mockHubs: HubItem[] = [
-  { id: "1", name: "Tech Enthusiasts", avatarUrl: "", description: "You joined 'Tech Enthusiasts'" },
-  { id: "2", name: "Photography Club", avatarUrl: "", description: "You joined 'Photography Club'" },
-];
-
+// Mock data for Streams (can be made dynamic later)
 const mockStreams: StreamItem[] = [
   { id: "1", name: "Tech Updates", followers: "610K", isVerified: true, isFollowing: false },
   { id: "2", name: "Daily Insights", followers: "8.2M", isVerified: true, isFollowing: false },
@@ -71,13 +63,13 @@ export const UpdatesView = () => {
   const [selectedMoments, setSelectedMoments] = useState<Moment[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { user } = useAuth();
+  const { memberships, isLoading: isLoadingCommunities, refetch: refetchCommunities, leaveCommunity, joinedCommunityIds } = useCommunities();
 
   const fetchMoments = async () => {
     if (!user) return;
     
     setIsLoading(true);
     try {
-      // Fetch non-expired moments
       const { data: moments, error } = await supabase
         .from('moments')
         .select('*')
@@ -92,10 +84,8 @@ export const UpdatesView = () => {
         return;
       }
 
-      // Get unique user IDs
       const userIds = [...new Set(moments.map(m => m.user_id))];
       
-      // Fetch profiles for these users
       const { data: profiles } = await supabase
         .from('profiles')
         .select('user_id, display_name, avatar_url')
@@ -103,13 +93,11 @@ export const UpdatesView = () => {
 
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
 
-      // Attach profiles to moments
       const momentsWithProfiles = moments.map(m => ({
         ...m,
         profile: profileMap.get(m.user_id)
       }));
 
-      // Group moments by user
       const grouped = new Map<string, GroupedMoments>();
       
       momentsWithProfiles.forEach(moment => {
@@ -126,7 +114,6 @@ export const UpdatesView = () => {
         grouped.get(userId)!.moments.push(moment);
       });
 
-      // Sort: own moments first, then by most recent
       const sortedGroups = Array.from(grouped.values()).sort((a, b) => {
         if (a.isOwn) return -1;
         if (b.isOwn) return 1;
@@ -144,7 +131,6 @@ export const UpdatesView = () => {
   useEffect(() => {
     fetchMoments();
 
-    // Subscribe to realtime updates
     const channel = supabase
       .channel('moments-changes')
       .on(
@@ -179,8 +165,26 @@ export const UpdatesView = () => {
     setViewDialogOpen(true);
   };
 
+  const handleLeaveCommunity = async (communityId: string, communityName: string) => {
+    const success = await leaveCommunity(communityId);
+    if (success) {
+      toast.success(`Left ${communityName}`);
+    } else {
+      toast.error("Failed to leave community");
+    }
+  };
+
   const ownMoments = groupedMoments.find(g => g.isOwn);
   const otherMoments = groupedMoments.filter(g => !g.isOwn);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -204,7 +208,6 @@ export const UpdatesView = () => {
             <h2 className="text-base font-semibold px-4 mb-3 text-foreground">Moments</h2>
             <div className="relative">
               <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
-                {/* Add moment button or own moments */}
                 {ownMoments ? (
                   <MomentCard 
                     group={ownMoments} 
@@ -214,12 +217,10 @@ export const UpdatesView = () => {
                   <CreateMomentDialog onMomentCreated={fetchMoments} />
                 )}
                 
-                {/* Show add button if user has moments */}
                 {ownMoments && (
                   <CreateMomentDialog onMomentCreated={fetchMoments} />
                 )}
                 
-                {/* Other users' moments */}
                 {otherMoments.map((group) => (
                   <MomentCard 
                     key={group.userId} 
@@ -247,15 +248,75 @@ export const UpdatesView = () => {
           <section className="py-4">
             <div className="flex items-center justify-between px-4 mb-3">
               <h2 className="text-base font-semibold text-foreground">Hub</h2>
-              <Button variant="ghost" size="sm" className="text-primary text-sm font-medium h-8 px-3">
-                Explore
-              </Button>
+              <div className="flex items-center gap-2">
+                <CreateCommunityDialog onCommunityCreated={refetchCommunities} />
+                <ExploreCommunities 
+                  onJoined={refetchCommunities}
+                  joinedCommunityIds={joinedCommunityIds}
+                />
+              </div>
             </div>
-            <div className="space-y-0">
-              {mockHubs.map((hub) => (
-                <HubCard key={hub.id} hub={hub} />
-              ))}
-            </div>
+            
+            {isLoadingCommunities ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : memberships.length === 0 ? (
+              <div className="px-4 py-6 text-center">
+                <Users className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  You haven't joined any communities yet
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Create one or explore to find communities
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-0">
+                {memberships.map((membership) => (
+                  <div
+                    key={membership.community_id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer group"
+                  >
+                    <Avatar className="w-12 h-12 rounded-xl">
+                      <AvatarImage src={membership.community.avatar_url || ""} />
+                      <AvatarFallback className="bg-secondary/20 text-secondary rounded-xl text-sm font-semibold">
+                        {getInitials(membership.community.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-foreground truncate">
+                          {membership.community.name}
+                        </h3>
+                        {membership.role === 'owner' && (
+                          <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                            Owner
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                        <span>{membership.community.member_count} members</span>
+                      </div>
+                    </div>
+                    {membership.role !== 'owner' && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLeaveCommunity(membership.community_id, membership.community.name);
+                        }}
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Streams Section */}
@@ -335,32 +396,6 @@ const MomentCard = ({ group, onClick }: { group: GroupedMoments; onClick: () => 
       <span className="text-xs text-muted-foreground text-center truncate w-16 group-hover:text-foreground transition-colors">
         {group.isOwn ? "Your story" : group.displayName}
       </span>
-    </div>
-  );
-};
-
-const HubCard = ({ hub }: { hub: HubItem }) => {
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer">
-      <Avatar className="w-12 h-12 rounded-xl">
-        <AvatarImage src={hub.avatarUrl} />
-        <AvatarFallback className="bg-secondary/20 text-secondary rounded-xl text-sm font-semibold">
-          {getInitials(hub.name)}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-foreground truncate">{hub.name}</h3>
-        <p className="text-sm text-muted-foreground truncate">{hub.description}</p>
-      </div>
     </div>
   );
 };
