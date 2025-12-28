@@ -15,6 +15,7 @@ import { CallInterface } from "./CallInterface";
 import { IncomingCallDialog } from "./IncomingCallDialog";
 import { GroupBotSettings } from "./GroupBotSettings";
 import { GroupBotInteraction } from "./GroupBotInteraction";
+import { ContactLanguagePreferences } from "./ContactLanguagePreferences";
 import EmojiPicker, { EmojiClickData, Theme, EmojiStyle } from 'emoji-picker-react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -75,6 +76,7 @@ const ChatInterface = ({
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showContactLanguagePrefs, setShowContactLanguagePrefs] = useState(false);
   const [outgoingLanguage, setOutgoingLanguage] = useState<{ code: string; name: string } | null>(null);
   const [detectingOutgoing, setDetectingOutgoing] = useState(false);
   const detectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -875,6 +877,27 @@ const handleDeleteMessage = async (messageId: string) => {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          
+          {/* Per-contact language settings */}
+          {!isGroup && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowContactLanguagePrefs(true)}
+                    className="hover:bg-primary/10"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Language settings for this contact</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -1167,6 +1190,17 @@ const handleDeleteMessage = async (messageId: string) => {
         isVideo={incomingCall.call_type === 'video'}
         onAccept={acceptCall}
         onReject={rejectCall}
+      />
+    )}
+
+    {/* Contact Language Preferences */}
+    {!isGroup && (
+      <ContactLanguagePreferences
+        open={showContactLanguagePrefs}
+        onOpenChange={setShowContactLanguagePrefs}
+        contactUserId={contactUserId}
+        contactName={contactName}
+        conversationId={conversationId || undefined}
       />
     )}
 

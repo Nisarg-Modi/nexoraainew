@@ -185,6 +185,50 @@ export type Database = {
           },
         ]
       }
+      contact_language_preferences: {
+        Row: {
+          auto_translate: boolean | null
+          contact_user_id: string
+          conversation_id: string | null
+          created_at: string
+          id: string
+          preferred_language: string | null
+          send_language: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_translate?: boolean | null
+          contact_user_id: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          preferred_language?: string | null
+          send_language?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_translate?: boolean | null
+          contact_user_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          preferred_language?: string | null
+          send_language?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_language_preferences_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           contact_name: string | null
