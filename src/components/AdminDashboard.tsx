@@ -5,8 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ShieldAlert, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ShieldAlert, Loader2, Shield, ShieldCheck, User } from "lucide-react";
 import { toast } from "sonner";
+import { Database } from "@/integrations/supabase/types";
+
+type AppRole = Database["public"]["Enums"]["app_role"];
 
 interface UserProfile {
   user_id: string;
@@ -15,6 +20,7 @@ interface UserProfile {
   avatar_url: string | null;
   status: string | null;
   created_at: string;
+  roles: AppRole[];
 }
 
 export const AdminDashboard = () => {
@@ -70,17 +76,95 @@ export const AdminDashboard = () => {
 
   const loadAllUsers = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch profiles
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('user_id, username, display_name, avatar_url, status, created_at')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setUsers(data || []);
+      if (profilesError) throw profilesError;
+
+      // Fetch all user roles
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      if (rolesError) throw rolesError;
+
+      // Combine profiles with their roles
+      const usersWithRoles = (profiles || []).map(profile => ({
+        ...profile,
+        roles: (roles || [])
+          .filter(r => r.user_id === profile.user_id)
+          .map(r => r.role)
+      }));
+
+      setUsers(usersWithRoles);
     } catch (error: any) {
       toast.error("Failed to load users: " + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const grantRole = async (userId: string, role: AppRole) => {
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast.error("User already has this role");
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success(`Role "${role}" granted successfully`);
+      loadAllUsers();
+    } catch (error: any) {
+      toast.error("Failed to grant role: " + error.message);
+    }
+  };
+
+  const revokeRole = async (userId: string, role: AppRole) => {
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId)
+        .eq('role', role);
+
+      if (error) throw error;
+
+      toast.success(`Role "${role}" revoked successfully`);
+      loadAllUsers();
+    } catch (error: any) {
+      toast.error("Failed to revoke role: " + error.message);
+    }
+  };
+
+  const getRoleBadgeVariant = (role: AppRole) => {
+    switch (role) {
+      case 'admin':
+        return 'destructive';
+      case 'moderator':
+        return 'default';
+      default:
+        return 'secondary';
+    }
+  };
+
+  const getRoleIcon = (role: AppRole) => {
+    switch (role) {
+      case 'admin':
+        return <ShieldAlert className="h-3 w-3" />;
+      case 'moderator':
+        return <ShieldCheck className="h-3 w-3" />;
+      default:
+        return <User className="h-3 w-3" />;
     }
   };
 
@@ -148,7 +232,8 @@ export const AdminDashboard = () => {
             <TableRow>
               <TableHead>User</TableHead>
               <TableHead>Username</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Current Roles</TableHead>
+              <TableHead>Manage Roles</TableHead>
               <TableHead>Joined</TableHead>
             </TableRow>
           </TableHeader>
@@ -170,9 +255,60 @@ export const AdminDashboard = () => {
                   <Badge variant="outline">@{user.username}</Badge>
                 </TableCell>
                 <TableCell>
-                  <span className="text-sm text-muted-foreground">
-                    {user.status || "No status"}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {user.roles.length > 0 ? (
+                      user.roles.map((role) => (
+                        <Badge
+                          key={role}
+                          variant={getRoleBadgeVariant(role)}
+                          className="flex items-center gap-1 cursor-pointer hover:opacity-80"
+                          onClick={() => revokeRole(user.user_id, role)}
+                          title="Click to revoke"
+                        >
+                          {getRoleIcon(role)}
+                          {role}
+                          <span className="ml-1 text-xs">×</span>
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No roles</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Select
+                    onValueChange={(value) => grantRole(user.user_id, value as AppRole)}
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="Add role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!user.roles.includes('admin') && (
+                        <SelectItem value="admin">
+                          <div className="flex items-center gap-2">
+                            <ShieldAlert className="h-4 w-4" />
+                            Admin
+                          </div>
+                        </SelectItem>
+                      )}
+                      {!user.roles.includes('moderator') && (
+                        <SelectItem value="moderator">
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4" />
+                            Moderator
+                          </div>
+                        </SelectItem>
+                      )}
+                      {!user.roles.includes('user') && (
+                        <SelectItem value="user">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4" />
+                            User
+                          </div>
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <span className="text-sm text-muted-foreground">
