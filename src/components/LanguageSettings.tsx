@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
-import { Languages, Loader2 } from "lucide-react";
+import { Languages, Loader2, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -11,6 +11,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import TranslationHistory from "./TranslationHistory";
 
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇬🇧' },
@@ -143,10 +152,28 @@ export const LanguageSettings = () => {
 
   return (
     <div className="space-y-4 p-4 bg-card rounded-lg border border-border">
-      <h3 className="text-lg font-semibold flex items-center gap-2">
-        <Languages className="w-5 h-5 text-primary" />
-        Language Preferences
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Languages className="w-5 h-5 text-primary" />
+          Language Preferences
+        </h3>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <History className="w-4 h-4" />
+              History
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-lg">
+            <SheetHeader>
+              <SheetTitle>Translation History</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6">
+              <TranslationHistory />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
       
       {/* Send Language */}
       <div className="space-y-2">
