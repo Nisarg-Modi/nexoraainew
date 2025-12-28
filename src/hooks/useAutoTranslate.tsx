@@ -7,6 +7,11 @@ interface LanguagePreferences {
   auto_translate: boolean;
 }
 
+interface ContactLanguagePreferences extends LanguagePreferences {
+  contact_user_id?: string;
+  conversation_id?: string;
+}
+
 interface TranslationResult {
   translatedText: string;
   sourceLanguage: string;
@@ -26,6 +31,7 @@ export const useAutoTranslate = () => {
     preferred_language: 'en',
     auto_translate: false,
   });
+  const [contactPreferences, setContactPreferences] = useState<ContactLanguagePreferences | null>(null);
   const [translationCache, setTranslationCache] = useState<Map<string, string>>(new Map());
   const [languageCache, setLanguageCache] = useState<Map<string, LanguageDetectionResult>>(new Map());
 
@@ -51,6 +57,54 @@ export const useAutoTranslate = () => {
       console.error('Error fetching language preferences:', error);
     }
   }, []);
+
+  const fetchContactPreferences = useCallback(async (contactUserId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return null;
+
+      const { data, error } = await supabase
+        .from('contact_language_preferences')
+        .select('*')
+        .eq('user_id', userData.user.id)
+        .eq('contact_user_id', contactUserId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        const prefs: ContactLanguagePreferences = {
+          send_language: data.send_language ?? 'en',
+          preferred_language: data.preferred_language ?? 'en',
+          auto_translate: data.auto_translate ?? false,
+          contact_user_id: data.contact_user_id,
+          conversation_id: data.conversation_id ?? undefined,
+        };
+        setContactPreferences(prefs);
+        return prefs;
+      }
+      
+      // No contact preferences, clear and return null
+      setContactPreferences(null);
+      return null;
+    } catch (error) {
+      console.error('Error fetching contact language preferences:', error);
+      setContactPreferences(null);
+      return null;
+    }
+  }, []);
+
+  // Get effective preferences (contact preferences override global)
+  const getEffectivePreferences = useCallback((): LanguagePreferences => {
+    if (contactPreferences) {
+      return {
+        send_language: contactPreferences.send_language,
+        preferred_language: contactPreferences.preferred_language,
+        auto_translate: contactPreferences.auto_translate,
+      };
+    }
+    return preferences;
+  }, [contactPreferences, preferences]);
 
   const translateText = useCallback(async (
     text: string, 
@@ -130,30 +184,42 @@ export const useAutoTranslate = () => {
     text: string, 
     messageId?: string
   ): Promise<string | null> => {
-    if (!preferences.auto_translate || !text.trim()) return null;
+    const effectivePrefs = getEffectivePreferences();
+    if (!effectivePrefs.auto_translate || !text.trim()) return null;
 
-    const result = await translateText(text, preferences.preferred_language, messageId);
+    const result = await translateText(text, effectivePrefs.preferred_language, messageId);
     return result?.translatedText || null;
-  }, [preferences, translateText]);
+  }, [getEffectivePreferences, translateText]);
 
   const translateOutgoing = useCallback(async (
     text: string,
     recipientPreferredLanguage?: string
   ): Promise<string> => {
+    const effectivePrefs = getEffectivePreferences();
+    
     // Only translate if recipient has a different preferred language
     if (!recipientPreferredLanguage || 
-        recipientPreferredLanguage === preferences.send_language) {
+        recipientPreferredLanguage === effectivePrefs.send_language) {
       return text;
     }
 
     const result = await translateText(text, recipientPreferredLanguage);
     return result?.translatedText || text;
-  }, [preferences, translateText]);
+  }, [getEffectivePreferences, translateText]);
+
+  // Check if auto-translate is enabled (considering contact preferences)
+  const isAutoTranslateEnabled = useCallback((): boolean => {
+    return getEffectivePreferences().auto_translate;
+  }, [getEffectivePreferences]);
 
   return {
     preferences,
+    contactPreferences,
     translating,
     fetchPreferences,
+    fetchContactPreferences,
+    getEffectivePreferences,
+    isAutoTranslateEnabled,
     translateText,
     detectLanguage,
     autoTranslateIncoming,
