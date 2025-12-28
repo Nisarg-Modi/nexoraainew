@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -79,9 +79,35 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const [showAIChat, setShowAIChat] = useState(false);
   const [aiQuery, setAiQuery] = useState('');
   const [globalSoundEnabled, setGlobalSoundEnabled] = useState(true);
+  const [dndSettings, setDndSettings] = useState({
+    dnd_enabled: false,
+    dnd_start_time: "22:00:00",
+    dnd_end_time: "07:00:00",
+  });
   const { toast } = useToast();
 
   const currentUserIdRef = useRef<string | null>(null);
+
+  // Check if currently in DND period
+  const isInDNDPeriod = useCallback((): boolean => {
+    if (!dndSettings.dnd_enabled) return false;
+
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+
+    const [startHour, startMin] = dndSettings.dnd_start_time.split(':').map(Number);
+    const [endHour, endMin] = dndSettings.dnd_end_time.split(':').map(Number);
+
+    const startTime = startHour * 60 + startMin;
+    const endTime = endHour * 60 + endMin;
+
+    // Handle overnight periods (e.g., 22:00 to 07:00)
+    if (startTime > endTime) {
+      return currentTime >= startTime || currentTime < endTime;
+    } else {
+      return currentTime >= startTime && currentTime < endTime;
+    }
+  }, [dndSettings]);
 
   useEffect(() => {
     const initUser = async () => {
@@ -89,14 +115,19 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
       if (userData.user) {
         currentUserIdRef.current = userData.user.id;
         
-        // Fetch global sound setting
+        // Fetch global sound and DND settings
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('notification_sound_enabled')
+          .select('notification_sound_enabled, dnd_enabled, dnd_start_time, dnd_end_time')
           .eq('user_id', userData.user.id)
           .single();
         
         setGlobalSoundEnabled(profileData?.notification_sound_enabled ?? true);
+        setDndSettings({
+          dnd_enabled: profileData?.dnd_enabled ?? false,
+          dnd_start_time: profileData?.dnd_start_time ?? "22:00:00",
+          dnd_end_time: profileData?.dnd_end_time ?? "07:00:00",
+        });
       }
     };
     initUser();
@@ -123,7 +154,9 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
           
           // Play notification sound if message is from someone else and sounds are enabled
           const newMessage = payload.new as { sender_id: string; conversation_id: string };
-          if (newMessage.sender_id !== currentUserIdRef.current && globalSoundEnabled) {
+          
+          // Check all conditions: not from self, global sound enabled, and not in DND period
+          if (newMessage.sender_id !== currentUserIdRef.current && globalSoundEnabled && !isInDNDPeriod()) {
             // Find the contact to check their sound setting
             const contact = contacts.find(c => 
               conversationMap[c.contact_user_id] === newMessage.conversation_id
@@ -164,7 +197,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [globalSoundEnabled, contacts, groups, conversationMap]);
+  }, [globalSoundEnabled, contacts, groups, conversationMap, isInDNDPeriod]);
 
   const fetchUnreadCounts = async () => {
     try {

@@ -604,6 +604,9 @@ export type Database = {
           bio: string | null
           created_at: string
           display_name: string
+          dnd_enabled: boolean | null
+          dnd_end_time: string | null
+          dnd_start_time: string | null
           gender: string | null
           id: string
           notification_sound_enabled: boolean | null
@@ -619,6 +622,9 @@ export type Database = {
           bio?: string | null
           created_at?: string
           display_name: string
+          dnd_enabled?: boolean | null
+          dnd_end_time?: string | null
+          dnd_start_time?: string | null
           gender?: string | null
           id?: string
           notification_sound_enabled?: boolean | null
@@ -634,6 +640,9 @@ export type Database = {
           bio?: string | null
           created_at?: string
           display_name?: string
+          dnd_enabled?: boolean | null
+          dnd_end_time?: string | null
+          dnd_start_time?: string | null
           gender?: string | null
           id?: string
           notification_sound_enabled?: boolean | null
