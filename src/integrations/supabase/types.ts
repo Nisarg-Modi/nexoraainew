@@ -611,6 +611,7 @@ export type Database = {
           id: string
           notification_sound_enabled: boolean | null
           preferred_language: string | null
+          send_language: string | null
           status: string | null
           updated_at: string
           user_id: string
@@ -629,6 +630,7 @@ export type Database = {
           id?: string
           notification_sound_enabled?: boolean | null
           preferred_language?: string | null
+          send_language?: string | null
           status?: string | null
           updated_at?: string
           user_id: string
@@ -647,6 +649,7 @@ export type Database = {
           id?: string
           notification_sound_enabled?: boolean | null
           preferred_language?: string | null
+          send_language?: string | null
           status?: string | null
           updated_at?: string
           user_id?: string

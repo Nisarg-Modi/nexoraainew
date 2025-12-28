@@ -11,6 +11,7 @@ import { Camera as CapacitorCamera } from '@capacitor/camera';
 import { CameraResultType, CameraSource } from '@capacitor/camera';
 import { NotificationSettings } from "./NotificationSettings";
 import { DoNotDisturbSettings } from "./DoNotDisturbSettings";
+import { LanguageSettings } from "./LanguageSettings";
 
 export const ProfileEditor = () => {
   const [loading, setLoading] = useState(false);
@@ -240,6 +241,9 @@ export const ProfileEditor = () => {
           "Save Profile"
         )}
       </Button>
+
+      {/* Language Settings */}
+      <LanguageSettings />
 
       {/* Notification Settings */}
       <NotificationSettings />
