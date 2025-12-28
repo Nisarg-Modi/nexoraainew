@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Camera as CapacitorCamera } from '@capacitor/camera';
 import { CameraResultType, CameraSource } from '@capacitor/camera';
+import { NotificationSettings } from "./NotificationSettings";
 
 export const ProfileEditor = () => {
   const [loading, setLoading] = useState(false);
@@ -238,6 +239,9 @@ export const ProfileEditor = () => {
           "Save Profile"
         )}
       </Button>
+
+      {/* Notification Settings */}
+      <NotificationSettings />
     </div>
   );
 };
