@@ -145,18 +145,18 @@ export const ProfileEditor = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
-      <div className="text-center space-y-4">
-        <h2 className="text-2xl font-bold">Edit Profile</h2>
-        <p className="text-muted-foreground">Update your profile picture and status</p>
+    <div className="w-full max-w-2xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="text-center space-y-2 sm:space-y-4">
+        <h2 className="text-xl sm:text-2xl font-bold">Edit Profile</h2>
+        <p className="text-sm sm:text-base text-muted-foreground">Update your profile picture and status</p>
       </div>
 
       {/* Avatar Section */}
-      <div className="flex flex-col items-center gap-4 p-6 bg-card rounded-lg border border-border">
-        <Avatar className="w-32 h-32">
+      <div className="flex flex-col items-center gap-3 sm:gap-4 p-4 sm:p-6 bg-card rounded-lg border border-border">
+        <Avatar className="w-24 h-24 sm:w-32 sm:h-32">
           <AvatarImage src={profile.avatar_url} />
-          <AvatarFallback className="bg-primary text-primary-foreground text-3xl">
-            {profile.display_name ? profile.display_name[0].toUpperCase() : <User className="w-12 h-12" />}
+          <AvatarFallback className="bg-primary text-primary-foreground text-2xl sm:text-3xl">
+            {profile.display_name ? profile.display_name[0].toUpperCase() : <User className="w-8 h-8 sm:w-12 sm:h-12" />}
           </AvatarFallback>
         </Avatar>
         
@@ -166,11 +166,12 @@ export const ProfileEditor = () => {
             size="sm"
             onClick={() => handleImageUpload('camera')}
             disabled={uploading}
+            className="text-xs sm:text-sm"
           >
             {uploading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 animate-spin" />
             ) : (
-              <Camera className="w-4 h-4 mr-2" />
+              <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
             )}
             Camera
           </Button>
@@ -179,8 +180,9 @@ export const ProfileEditor = () => {
             size="sm"
             onClick={() => handleImageUpload('gallery')}
             disabled={uploading}
+            className="text-xs sm:text-sm"
           >
-            <Upload className="w-4 h-4 mr-2" />
+            <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
             Gallery
           </Button>
         </div>
