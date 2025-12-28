@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle2, Send, Loader2, Trash2, Users, ArrowLeft } from "lucide-react";
+import { CheckCircle2, Send, Loader2, Trash2, Users, Image, Video, X, Play } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -52,6 +52,11 @@ export const ViewStreamDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [newPost, setNewPost] = useState("");
   const [isPosting, setIsPosting] = useState(false);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
 
   const fetchPosts = async () => {
@@ -80,22 +85,80 @@ export const ViewStreamDialog = ({
     }
   }, [open, stream]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 50MB for videos, 10MB for images)
+    const maxSize = type === 'video' ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error(`File too large. Maximum size is ${type === 'video' ? '50MB' : '10MB'}`);
+      return;
+    }
+
+    setMediaFile(file);
+    setMediaType(type);
+    setMediaPreview(URL.createObjectURL(file));
+  };
+
+  const clearMedia = () => {
+    if (mediaPreview) {
+      URL.revokeObjectURL(mediaPreview);
+    }
+    setMediaFile(null);
+    setMediaPreview(null);
+    setMediaType(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    if (videoInputRef.current) videoInputRef.current.value = '';
+  };
+
+  const uploadMedia = async (file: File): Promise<string | null> => {
+    if (!user) return null;
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from('stream-media')
+      .upload(fileName, file);
+
+    if (error) {
+      console.error("Upload error:", error);
+      throw error;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('stream-media')
+      .getPublicUrl(fileName);
+
+    return urlData.publicUrl;
+  };
+
   const handlePost = async () => {
-    if (!stream || !user || !newPost.trim()) return;
+    if (!stream || !user || (!newPost.trim() && !mediaFile)) return;
 
     setIsPosting(true);
     try {
+      let mediaUrl: string | null = null;
+
+      if (mediaFile) {
+        mediaUrl = await uploadMedia(mediaFile);
+      }
+
       const { error } = await supabase
         .from('stream_posts')
         .insert({
           stream_id: stream.id,
           content: newPost.trim(),
+          media_url: mediaUrl,
+          media_type: mediaType || 'text',
         });
 
       if (error) throw error;
 
       toast.success("Posted to stream!");
       setNewPost("");
+      clearMedia();
       fetchPosts();
     } catch (error: any) {
       console.error("Error posting:", error);
@@ -105,14 +168,25 @@ export const ViewStreamDialog = ({
     }
   };
 
-  const handleDeletePost = async (postId: string) => {
+  const handleDeletePost = async (postId: string, mediaUrl: string | null) => {
     try {
+      // Delete from database
       const { error } = await supabase
         .from('stream_posts')
         .delete()
         .eq('id', postId);
 
       if (error) throw error;
+
+      // Try to delete media from storage if exists
+      if (mediaUrl && user) {
+        const urlParts = mediaUrl.split('/stream-media/');
+        if (urlParts.length > 1) {
+          await supabase.storage
+            .from('stream-media')
+            .remove([urlParts[1]]);
+        }
+      }
 
       setPosts(prev => prev.filter(p => p.id !== postId));
       toast.success("Post deleted");
@@ -201,13 +275,31 @@ export const ViewStreamDialog = ({
               {posts.map((post) => (
                 <div key={post.id} className="bg-muted/30 rounded-lg p-4 group">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-foreground whitespace-pre-wrap">{post.content}</p>
+                    <div className="flex-1 min-w-0">
+                      {post.content && (
+                        <p className="text-foreground whitespace-pre-wrap mb-2">{post.content}</p>
+                      )}
+                      {post.media_url && post.media_type === 'image' && (
+                        <img 
+                          src={post.media_url} 
+                          alt="Post media" 
+                          className="rounded-lg max-h-64 w-auto object-cover"
+                        />
+                      )}
+                      {post.media_url && post.media_type === 'video' && (
+                        <video 
+                          src={post.media_url} 
+                          controls 
+                          className="rounded-lg max-h-64 w-full"
+                        />
+                      )}
+                    </div>
                     {isOwner && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeletePost(post.id)}
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+                        onClick={() => handleDeletePost(post.id, post.media_url)}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -224,20 +316,82 @@ export const ViewStreamDialog = ({
 
         {/* Post input (only for owner) */}
         {isOwner && (
-          <div className="p-4 border-t border-border">
+          <div className="p-4 border-t border-border space-y-3">
+            {/* Media preview */}
+            {mediaPreview && (
+              <div className="relative inline-block">
+                {mediaType === 'image' ? (
+                  <img 
+                    src={mediaPreview} 
+                    alt="Preview" 
+                    className="h-20 w-auto rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="relative h-20 w-32 bg-muted rounded-lg flex items-center justify-center">
+                    <Play className="h-6 w-6 text-muted-foreground" />
+                    <span className="absolute bottom-1 left-1 text-xs bg-background/80 px-1 rounded">Video</span>
+                  </div>
+                )}
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full"
+                  onClick={clearMedia}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <Textarea
-                placeholder="Share an update with your followers..."
-                value={newPost}
-                onChange={(e) => setNewPost(e.target.value)}
-                className="min-h-[60px] resize-none"
-                maxLength={1000}
-              />
+              <div className="flex-1 space-y-2">
+                <Textarea
+                  placeholder="Share an update with your followers..."
+                  value={newPost}
+                  onChange={(e) => setNewPost(e.target.value)}
+                  className="min-h-[60px] resize-none"
+                  maxLength={1000}
+                />
+                <div className="flex gap-1">
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e, 'image')}
+                  />
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e, 'video')}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={!!mediaFile}
+                  >
+                    <Image className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={!!mediaFile}
+                  >
+                    <Video className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
               <Button
                 size="icon"
                 onClick={handlePost}
-                disabled={!newPost.trim() || isPosting}
-                className="shrink-0"
+                disabled={(!newPost.trim() && !mediaFile) || isPosting}
+                className="shrink-0 self-end"
               >
                 {isPosting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
