@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Camera as CapacitorCamera } from '@capacitor/camera';
 import { CameraResultType, CameraSource } from '@capacitor/camera';
 import { NotificationSettings } from "./NotificationSettings";
+import { DoNotDisturbSettings } from "./DoNotDisturbSettings";
 
 export const ProfileEditor = () => {
   const [loading, setLoading] = useState(false);
@@ -242,6 +243,9 @@ export const ProfileEditor = () => {
 
       {/* Notification Settings */}
       <NotificationSettings />
+
+      {/* Do Not Disturb Settings */}
+      <DoNotDisturbSettings />
     </div>
   );
 };
