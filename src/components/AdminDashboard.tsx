@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ShieldAlert, Loader2, Shield, ShieldCheck, User } from "lucide-react";
+import { ShieldAlert, Loader2, Shield, ShieldCheck, User, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Database } from "@/integrations/supabase/types";
 
@@ -39,6 +39,12 @@ interface RevokeConfirmation {
   displayName: string;
 }
 
+interface DeleteConfirmation {
+  userId: string;
+  displayName: string;
+  username: string;
+}
+
 export const AdminDashboard = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -46,6 +52,9 @@ export const AdminDashboard = () => {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
   const [revokeConfirmation, setRevokeConfirmation] = useState<RevokeConfirmation | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmation | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     checkAdminStatus();
@@ -66,6 +75,8 @@ export const AdminDashboard = () => {
         navigate("/auth");
         return;
       }
+
+      setCurrentUserId(user.id);
 
       // Check admin role using the has_role function
       const { data, error } = await supabase.rpc('has_role', {
@@ -172,6 +183,39 @@ export const AdminDashboard = () => {
     }
   };
 
+  const deleteUser = async (userId: string) => {
+    setDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ userId }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
+      }
+
+      toast.success("User deleted successfully");
+      setDeleteConfirmation(null);
+      loadAllUsers();
+    } catch (error: any) {
+      toast.error("Failed to delete user: " + error.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const getRoleBadgeVariant = (role: AppRole) => {
     switch (role) {
       case 'admin':
@@ -260,6 +304,7 @@ export const AdminDashboard = () => {
               <TableHead>Username</TableHead>
               <TableHead>Current Roles</TableHead>
               <TableHead>Manage Roles</TableHead>
+              <TableHead>Actions</TableHead>
               <TableHead>Joined</TableHead>
             </TableRow>
           </TableHeader>
@@ -337,6 +382,22 @@ export const AdminDashboard = () => {
                   </Select>
                 </TableCell>
                 <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setDeleteConfirmation({
+                      userId: user.user_id,
+                      displayName: user.display_name,
+                      username: user.username
+                    })}
+                    disabled={user.user_id === currentUserId}
+                    title={user.user_id === currentUserId ? "Cannot delete yourself" : "Delete user"}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+                <TableCell>
                   <span className="text-sm text-muted-foreground">
                     {new Date(user.created_at).toLocaleDateString()}
                   </span>
@@ -371,6 +432,48 @@ export const AdminDashboard = () => {
               }}
             >
               Revoke Admin
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteConfirmation} onOpenChange={() => setDeleteConfirmation(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete User Account
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Are you sure you want to permanently delete the account for{" "}
+                <span className="font-semibold">{deleteConfirmation?.displayName}</span>{" "}
+                (@{deleteConfirmation?.username})?
+              </p>
+              <p className="text-destructive font-medium">
+                This action cannot be undone. All user data will be permanently removed.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteConfirmation) {
+                  deleteUser(deleteConfirmation.userId);
+                }
+              }}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete User"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
