@@ -11,42 +11,9 @@ interface ChatMessage {
   content: string;
 }
 
-// In-memory rate limit store (per edge function instance)
-// For production, consider using Redis or database-based rate limiting
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
-// Rate limit configuration: 20 requests per minute per user
-const RATE_LIMIT_MAX = 20;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-
-function checkRateLimit(userId: string): { allowed: boolean; remaining: number; resetIn: number } {
-  const now = Date.now();
-  const userLimit = rateLimitStore.get(userId);
-
-  // Clean up expired entries periodically
-  if (rateLimitStore.size > 1000) {
-    for (const [key, value] of rateLimitStore.entries()) {
-      if (now > value.resetTime) {
-        rateLimitStore.delete(key);
-      }
-    }
-  }
-
-  if (!userLimit || now > userLimit.resetTime) {
-    // First request or window expired - reset
-    rateLimitStore.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetIn: RATE_LIMIT_WINDOW_MS };
-  }
-
-  if (userLimit.count >= RATE_LIMIT_MAX) {
-    // Rate limit exceeded
-    return { allowed: false, remaining: 0, resetIn: userLimit.resetTime - now };
-  }
-
-  // Increment count
-  userLimit.count++;
-  return { allowed: true, remaining: RATE_LIMIT_MAX - userLimit.count, resetIn: userLimit.resetTime - now };
-}
+// Rate limit configuration
+const RATE_LIMIT_MAX = 20; // requests per window
+const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -64,14 +31,18 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client to verify user
+    // Create Supabase client with service role for rate limit operations
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Create user client for auth verification
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
     if (userError || !user) {
       console.error("Auth error:", userError?.message);
       return new Response(
@@ -80,28 +51,45 @@ serve(async (req) => {
       );
     }
 
-    // Check rate limit
-    const rateLimit = checkRateLimit(user.id);
-    if (!rateLimit.allowed) {
-      console.warn("Rate limit exceeded for user:", user.id);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Rate limit exceeded. Please wait before sending more messages.',
-          retryAfter: Math.ceil(rateLimit.resetIn / 1000)
-        }),
-        { 
-          status: 429, 
-          headers: { 
-            ...corsHeaders, 
-            'Content-Type': 'application/json',
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(Math.ceil(rateLimit.resetIn / 1000))
-          } 
-        }
-      );
-    }
+    // Check rate limit using database function (atomic operation)
+    const { data: rateLimitResult, error: rateLimitError } = await supabaseAdmin.rpc(
+      'check_ai_chat_rate_limit',
+      { 
+        p_user_id: user.id,
+        p_max_requests: RATE_LIMIT_MAX,
+        p_window_seconds: RATE_LIMIT_WINDOW_SECONDS
+      }
+    );
 
-    console.log("Rate limit check passed for user:", user.id, "Remaining:", rateLimit.remaining);
+    if (rateLimitError) {
+      console.error("Rate limit check error:", rateLimitError.message);
+      // Fail open - allow request if rate limit check fails
+      console.warn("Rate limit check failed, allowing request");
+    } else if (rateLimitResult && rateLimitResult.length > 0) {
+      const rateLimit = rateLimitResult[0];
+      
+      if (!rateLimit.allowed) {
+        console.warn("Rate limit exceeded for user:", user.id);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Rate limit exceeded. Please wait before sending more messages.',
+            retryAfter: rateLimit.reset_in
+          }),
+          { 
+            status: 429, 
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              'X-RateLimit-Remaining': '0',
+              'X-RateLimit-Reset': String(rateLimit.reset_in),
+              'Retry-After': String(rateLimit.reset_in)
+            } 
+          }
+        );
+      }
+
+      console.log("Rate limit check passed for user:", user.id, "Remaining:", rateLimit.remaining);
+    }
 
     const body = await req.json();
     const { messages } = body;
