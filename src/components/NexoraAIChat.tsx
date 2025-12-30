@@ -23,11 +23,16 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const processedInitialQuery = useRef(false);
+  const isRequestInProgress = useRef(false);
 
   useEffect(() => {
-    if (initialQuery && !processedInitialQuery.current) {
+    if (initialQuery && !processedInitialQuery.current && !isRequestInProgress.current) {
       processedInitialQuery.current = true;
-      sendMessage(initialQuery);
+      // Small delay to prevent race conditions with component mounting
+      const timer = setTimeout(() => {
+        sendMessage(initialQuery);
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [initialQuery]);
 
@@ -38,7 +43,10 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   }, [messages]);
 
   const sendMessage = async (messageText: string) => {
-    if (!messageText.trim() || isLoading) return;
+    if (!messageText.trim() || isLoading || isRequestInProgress.current) return;
+    
+    // Prevent duplicate requests
+    isRequestInProgress.current = true;
 
     // Validate message length on client side
     if (messageText.length > 10000) {
@@ -152,6 +160,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
       setMessages(prev => prev.filter(m => m.content !== ''));
     } finally {
       setIsLoading(false);
+      isRequestInProgress.current = false;
     }
   };
 
