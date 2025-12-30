@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_chat_rate_limits: {
+        Row: {
+          created_at: string
+          id: string
+          request_count: number
+          updated_at: string
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          request_count?: number
+          updated_at?: string
+          user_id: string
+          window_start?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          request_count?: number
+          updated_at?: string
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       bot_interactions: {
         Row: {
           command: string | null
@@ -1186,6 +1213,18 @@ export type Database = {
         Args: { profile_user_id: string; viewer_id: string }
         Returns: boolean
       }
+      check_ai_chat_rate_limit: {
+        Args: {
+          p_max_requests?: number
+          p_user_id: string
+          p_window_seconds?: number
+        }
+        Returns: {
+          allowed: boolean
+          remaining: number
+          reset_in: number
+        }[]
+      }
       check_contact_rate_limit: {
         Args: { user_uuid: string }
         Returns: boolean
@@ -1198,6 +1237,7 @@ export type Database = {
         Args: { conv_id: string; user_uuid: string }
         Returns: boolean
       }
+      cleanup_ai_chat_rate_limits: { Args: never; Returns: undefined }
       create_group_conversation: {
         Args: { p_group_name: string; p_member_ids: string[] }
         Returns: string
