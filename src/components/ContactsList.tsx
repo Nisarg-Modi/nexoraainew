@@ -87,6 +87,27 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
   const { toast } = useToast();
 
   const currentUserIdRef = useRef<string | null>(null);
+  const contactsRef = useRef<Contact[]>([]);
+  const groupsRef = useRef<GroupConversation[]>([]);
+  const conversationMapRef = useRef<Record<string, string>>({});
+  const globalSoundEnabledRef = useRef(true);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    contactsRef.current = contacts;
+  }, [contacts]);
+
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+
+  useEffect(() => {
+    conversationMapRef.current = conversationMap;
+  }, [conversationMap]);
+
+  useEffect(() => {
+    globalSoundEnabledRef.current = globalSoundEnabled;
+  }, [globalSoundEnabled]);
 
   // Check if currently in DND period
   const isInDNDPeriod = useCallback((): boolean => {
@@ -133,12 +154,15 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     initUser();
   }, []);
 
+  // Initial data fetch - only run once on mount
   useEffect(() => {
     fetchContacts();
     fetchGroups();
     fetchUnreadCounts();
+  }, []);
 
-    // Subscribe to new messages for real-time unread count updates
+  // Separate effect for realtime subscription - using refs to avoid re-subscribing
+  useEffect(() => {
     const channel = supabase
       .channel('unread-messages')
       .on(
@@ -155,15 +179,15 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
           // Play notification sound if message is from someone else and sounds are enabled
           const newMessage = payload.new as { sender_id: string; conversation_id: string };
           
-          // Check all conditions: not from self, global sound enabled, and not in DND period
-          if (newMessage.sender_id !== currentUserIdRef.current && globalSoundEnabled && !isInDNDPeriod()) {
+          // Use refs to get current values without triggering re-subscription
+          if (newMessage.sender_id !== currentUserIdRef.current && globalSoundEnabledRef.current && !isInDNDPeriod()) {
             // Find the contact to check their sound setting
-            const contact = contacts.find(c => 
-              conversationMap[c.contact_user_id] === newMessage.conversation_id
+            const contact = contactsRef.current.find(c => 
+              conversationMapRef.current[c.contact_user_id] === newMessage.conversation_id
             );
             
             // Check if this is a group message
-            const group = groups.find(g => g.id === newMessage.conversation_id);
+            const group = groupsRef.current.find(g => g.id === newMessage.conversation_id);
             
             // For contacts, check per-contact sound setting
             if (contact && contact.notification_sound_enabled !== false) {
@@ -197,7 +221,7 @@ const ContactsList = ({ onStartChat, onStartGroupChat }: ContactsListProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [globalSoundEnabled, contacts, groups, conversationMap, isInDNDPeriod]);
+  }, [isInDNDPeriod]);
 
   const fetchUnreadCounts = async () => {
     try {
