@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Sparkles } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -16,6 +16,9 @@ interface NexoraAIChatProps {
   initialQuery?: string;
 }
 
+const CHAT_HISTORY_KEY = 'nexora_ai_chat_history';
+const MAX_HISTORY_MESSAGES = 50; // Limit to prevent localStorage overflow
+
 const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -24,6 +27,48 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const { toast } = useToast();
   const processedInitialQuery = useRef(false);
   const isRequestInProgress = useRef(false);
+  const historyLoaded = useRef(false);
+
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    if (historyLoaded.current) return;
+    historyLoaded.current = true;
+    
+    try {
+      const savedHistory = localStorage.getItem(CHAT_HISTORY_KEY);
+      if (savedHistory) {
+        const parsed = JSON.parse(savedHistory) as Message[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+    }
+  }, []);
+
+  // Save chat history to localStorage when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        // Keep only the last MAX_HISTORY_MESSAGES to prevent overflow
+        const messagesToSave = messages.slice(-MAX_HISTORY_MESSAGES);
+        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messagesToSave));
+      } catch (error) {
+        console.error('Failed to save chat history:', error);
+      }
+    }
+  }, [messages]);
+
+  // Clear chat history
+  const clearHistory = useCallback(() => {
+    setMessages([]);
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+    toast({
+      title: 'Chat cleared',
+      description: 'Conversation history has been cleared.',
+    });
+  }, [toast]);
 
   useEffect(() => {
     if (initialQuery && !processedInitialQuery.current && !isRequestInProgress.current) {
@@ -181,19 +226,34 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b bg-gradient-to-r from-primary/10 to-primary/5">
-        <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
+      <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary/10 to-primary/5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h2 className="font-semibold">Nexora AI</h2>
-            <p className="text-xs text-muted-foreground">Ask me anything</p>
+          <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h2 className="font-semibold">Nexora AI</h2>
+              <p className="text-xs text-muted-foreground">
+                {messages.length > 0 ? `${messages.length} messages` : 'Ask me anything'}
+              </p>
+            </div>
           </div>
         </div>
+        {messages.length > 0 && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={clearHistory}
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+            title="Clear chat history"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
       {/* Messages */}
