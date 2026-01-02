@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Sparkles, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Trash2, Loader2, Plus, MessageSquare, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -10,6 +10,12 @@ interface Message {
   id?: string;
   role: 'user' | 'assistant';
   content: string;
+}
+
+interface Conversation {
+  id: string;
+  title: string;
+  updated_at: string;
 }
 
 interface NexoraAIChatProps {
@@ -20,56 +26,148 @@ interface NexoraAIChatProps {
 const MAX_HISTORY_MESSAGES = 50;
 
 const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [showConversationList, setShowConversationList] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const processedInitialQuery = useRef(false);
   const isRequestInProgress = useRef(false);
-  const historyLoaded = useRef(false);
 
-  // Load chat history from database on mount
+  // Load conversations list
   useEffect(() => {
-    if (historyLoaded.current) return;
-    historyLoaded.current = true;
-    
-    const loadHistory = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          setIsLoadingHistory(false);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('ai_chat_messages')
-          .select('id, role, content')
-          .order('created_at', { ascending: true })
-          .limit(MAX_HISTORY_MESSAGES);
-
-        if (error) {
-          console.error('Failed to load chat history:', error);
-        } else if (data && data.length > 0) {
-          setMessages(data.map(m => ({ 
-            id: m.id, 
-            role: m.role as 'user' | 'assistant', 
-            content: m.content 
-          })));
-        }
-      } catch (error) {
-        console.error('Failed to load chat history:', error);
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
-
-    loadHistory();
+    loadConversations();
   }, []);
 
-  // Save message to database
-  const saveMessage = async (message: Message): Promise<string | null> => {
+  const loadConversations = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setIsLoadingConversations(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('ai_chat_conversations')
+        .select('id, title, updated_at')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Failed to load conversations:', error);
+      } else {
+        setConversations(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  };
+
+  // Load messages for active conversation
+  useEffect(() => {
+    if (activeConversationId) {
+      loadMessages(activeConversationId);
+    }
+  }, [activeConversationId]);
+
+  const loadMessages = async (conversationId: string) => {
+    setIsLoadingMessages(true);
+    try {
+      const { data, error } = await supabase
+        .from('ai_chat_messages')
+        .select('id, role, content')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+        .limit(MAX_HISTORY_MESSAGES);
+
+      if (error) {
+        console.error('Failed to load messages:', error);
+      } else {
+        setMessages(data?.map(m => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content
+        })) || []);
+      }
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+
+  // Handle initial query - create new conversation
+  useEffect(() => {
+    if (initialQuery && !processedInitialQuery.current && !isRequestInProgress.current && !isLoadingConversations) {
+      processedInitialQuery.current = true;
+      const timer = setTimeout(async () => {
+        const newConvId = await createConversation(initialQuery.slice(0, 50));
+        if (newConvId) {
+          setActiveConversationId(newConvId);
+          setShowConversationList(false);
+          // Wait for state to settle then send message
+          setTimeout(() => sendMessage(initialQuery, newConvId), 100);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [initialQuery, isLoadingConversations]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const createConversation = async (title: string = 'New Chat'): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return null;
+
+      const { data, error } = await supabase
+        .from('ai_chat_conversations')
+        .insert({
+          user_id: session.user.id,
+          title: title.trim() || 'New Chat',
+        })
+        .select('id, title, updated_at')
+        .single();
+
+      if (error) {
+        console.error('Failed to create conversation:', error);
+        return null;
+      }
+
+      setConversations(prev => [data, ...prev]);
+      return data.id;
+    } catch (error) {
+      console.error('Failed to create conversation:', error);
+      return null;
+    }
+  };
+
+  const updateConversationTitle = async (conversationId: string, title: string) => {
+    try {
+      await supabase
+        .from('ai_chat_conversations')
+        .update({ title })
+        .eq('id', conversationId);
+
+      setConversations(prev =>
+        prev.map(c => c.id === conversationId ? { ...c, title } : c)
+      );
+    } catch (error) {
+      console.error('Failed to update conversation title:', error);
+    }
+  };
+
+  const saveMessage = async (message: Message, conversationId: string): Promise<string | null> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return null;
@@ -78,6 +176,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
         .from('ai_chat_messages')
         .insert({
           user_id: session.user.id,
+          conversation_id: conversationId,
           role: message.role,
           content: message.content,
         })
@@ -95,69 +194,81 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
     }
   };
 
-  // Clear chat history from database
-  const clearHistory = useCallback(async () => {
+  const deleteConversation = useCallback(async (conversationId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { error } = await supabase
-          .from('ai_chat_messages')
-          .delete()
-          .eq('user_id', session.user.id);
+      const { error } = await supabase
+        .from('ai_chat_conversations')
+        .delete()
+        .eq('id', conversationId);
 
-        if (error) {
-          console.error('Failed to clear chat history:', error);
-        }
+      if (error) {
+        console.error('Failed to delete conversation:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to delete conversation.',
+          variant: 'destructive',
+        });
+        return;
       }
-      
-      setMessages([]);
+
+      setConversations(prev => prev.filter(c => c.id !== conversationId));
+      if (activeConversationId === conversationId) {
+        setActiveConversationId(null);
+        setMessages([]);
+        setShowConversationList(true);
+      }
       toast({
-        title: 'Chat cleared',
-        description: 'Conversation history has been cleared.',
+        title: 'Conversation deleted',
+        description: 'The conversation has been removed.',
       });
     } catch (error) {
-      console.error('Failed to clear chat history:', error);
+      console.error('Failed to delete conversation:', error);
+    }
+  }, [activeConversationId, toast]);
+
+  const handleNewChat = async () => {
+    const newConvId = await createConversation();
+    if (newConvId) {
+      setActiveConversationId(newConvId);
+      setMessages([]);
+      setShowConversationList(false);
+    }
+  };
+
+  const handleSelectConversation = (conv: Conversation) => {
+    setActiveConversationId(conv.id);
+    setShowConversationList(false);
+  };
+
+  const handleBackToList = () => {
+    setShowConversationList(true);
+  };
+
+  const sendMessage = async (messageText: string, conversationId?: string) => {
+    if (!messageText.trim() || isLoading || isRequestInProgress.current) return;
+
+    const targetConvId = conversationId || activeConversationId;
+    if (!targetConvId) {
       toast({
         title: 'Error',
-        description: 'Failed to clear chat history.',
+        description: 'Please select or create a conversation first.',
         variant: 'destructive',
       });
+      return;
     }
-  }, [toast]);
 
-  useEffect(() => {
-    if (initialQuery && !processedInitialQuery.current && !isRequestInProgress.current && !isLoadingHistory) {
-      processedInitialQuery.current = true;
-      const timer = setTimeout(() => {
-        sendMessage(initialQuery);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [initialQuery, isLoadingHistory]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const sendMessage = async (messageText: string) => {
-    if (!messageText.trim() || isLoading || isRequestInProgress.current) return;
-    
-    // Prevent duplicate requests
     isRequestInProgress.current = true;
 
-    // Validate message length on client side
     if (messageText.length > 10000) {
       toast({
         title: 'Message too long',
         description: 'Please keep your message under 10,000 characters.',
         variant: 'destructive',
       });
+      isRequestInProgress.current = false;
       return;
     }
 
-    // Get authenticated session
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       toast({
@@ -165,6 +276,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
         description: 'You need to be signed in to use Nexora AI.',
         variant: 'destructive',
       });
+      isRequestInProgress.current = false;
       return;
     }
 
@@ -173,8 +285,15 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
     setInput('');
     setIsLoading(true);
 
-    // Save user message to database
-    saveMessage(userMessage);
+    // Save user message and update title if first message
+    saveMessage(userMessage, targetConvId);
+    
+    // Update conversation title based on first user message
+    const currentConv = conversations.find(c => c.id === targetConvId);
+    if (currentConv?.title === 'New Chat' && messages.length === 0) {
+      const newTitle = messageText.slice(0, 40) + (messageText.length > 40 ? '...' : '');
+      updateConversationTitle(targetConvId, newTitle);
+    }
 
     let assistantContent = '';
 
@@ -185,7 +304,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content }))
         }),
       });
@@ -209,7 +328,6 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
       const decoder = new TextDecoder();
       let buffer = '';
 
-      // Add empty assistant message to update
       setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
       while (true) {
@@ -245,16 +363,14 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
               });
             }
           } catch {
-            // Incomplete JSON, put back in buffer
             buffer = line + '\n' + buffer;
             break;
           }
         }
       }
 
-      // Save assistant message to database after streaming completes
       if (assistantContent) {
-        saveMessage({ role: 'assistant', content: assistantContent });
+        saveMessage({ role: 'assistant', content: assistantContent }, targetConvId);
       }
     } catch (error) {
       console.error('Nexora AI error:', error);
@@ -263,7 +379,6 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
         description: error instanceof Error ? error.message : 'Failed to get AI response',
         variant: 'destructive',
       });
-      // Remove empty assistant message on error
       setMessages(prev => prev.filter(m => m.content !== ''));
     } finally {
       setIsLoading(false);
@@ -285,33 +400,133 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
     { emoji: '🎯', text: 'Help me stay motivated' },
   ];
 
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Conversation List View
+  if (showConversationList) {
+    return (
+      <div className="flex flex-col h-full bg-background">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary/10 to-primary/5">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Nexora AI</h2>
+                <p className="text-xs text-muted-foreground">
+                  {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+          </div>
+          <Button onClick={handleNewChat} size="sm" className="gap-1">
+            <Plus className="w-4 h-4" />
+            New
+          </Button>
+        </div>
+
+        {/* Conversations List */}
+        <ScrollArea className="flex-1">
+          {isLoadingConversations ? (
+            <div className="flex flex-col items-center justify-center h-full py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground text-sm">Loading conversations...</p>
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-12 px-4">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-4">
+                <Sparkles className="w-8 h-8 text-primary-foreground" />
+              </div>
+              <h3 className="font-semibold text-lg mb-2">No conversations yet</h3>
+              <p className="text-muted-foreground text-sm max-w-xs mb-6">
+                Start a new conversation with Nexora AI!
+              </p>
+              <Button onClick={handleNewChat} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Start New Chat
+              </Button>
+            </div>
+          ) : (
+            <div className="p-2">
+              {conversations.map((conv) => (
+                <div
+                  key={conv.id}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors group"
+                  onClick={() => handleSelectConversation(conv)}
+                >
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <MessageSquare className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{conv.title}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(conv.updated_at)}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(conv.id);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+    );
+  }
+
+  // Chat View
+  const activeConv = conversations.find(c => c.id === activeConversationId);
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary/10 to-primary/5">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
-            <ArrowLeft className="w-5 h-5" />
+          <Button variant="ghost" size="icon" onClick={handleBackToList} className="shrink-0">
+            <ChevronLeft className="w-5 h-5" />
           </Button>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-primary-foreground" />
             </div>
-            <div>
-              <h2 className="font-semibold">Nexora AI</h2>
+            <div className="min-w-0">
+              <h2 className="font-semibold truncate max-w-[180px]">
+                {activeConv?.title || 'New Chat'}
+              </h2>
               <p className="text-xs text-muted-foreground">
-                {messages.length > 0 ? `${messages.length} messages` : 'Ask me anything'}
+                {messages.length > 0 ? `${messages.length} messages` : 'Start chatting'}
               </p>
             </div>
           </div>
         </div>
         {messages.length > 0 && (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={clearHistory}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => activeConversationId && deleteConversation(activeConversationId)}
             className="shrink-0 text-muted-foreground hover:text-destructive"
-            title="Clear chat history"
+            title="Delete conversation"
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -320,14 +535,14 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        {isLoadingHistory && (
+        {isLoadingMessages && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground text-sm">Loading conversation...</p>
+            <p className="text-muted-foreground text-sm">Loading messages...</p>
           </div>
         )}
-        
-        {!isLoadingHistory && messages.length === 0 && !isLoading && (
+
+        {!isLoadingMessages && messages.length === 0 && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-4">
               <Sparkles className="w-8 h-8 text-primary-foreground" />
@@ -336,7 +551,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
             <p className="text-muted-foreground text-sm max-w-xs mb-6">
               I'm here to help you with questions, suggestions, and more!
             </p>
-            
+
             {/* Quick Prompts */}
             <div className="w-full max-w-sm space-y-2">
               <p className="text-xs text-muted-foreground mb-3">Try asking:</p>
@@ -355,11 +570,11 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
             </div>
           </div>
         )}
-        
+
         <div className="space-y-4">
           {messages.map((message, index) => (
             <div
-              key={index}
+              key={message.id || index}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
@@ -398,9 +613,9 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
             disabled={isLoading}
             maxLength={10000}
           />
-          <Button 
-            type="submit" 
-            size="icon" 
+          <Button
+            type="submit"
+            size="icon"
             className="rounded-full shrink-0"
             disabled={!input.trim() || isLoading}
           >
