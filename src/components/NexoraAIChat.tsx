@@ -2,11 +2,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
 }
@@ -16,70 +17,123 @@ interface NexoraAIChatProps {
   initialQuery?: string;
 }
 
-const CHAT_HISTORY_KEY = 'nexora_ai_chat_history';
-const MAX_HISTORY_MESSAGES = 50; // Limit to prevent localStorage overflow
+const MAX_HISTORY_MESSAGES = 50;
 
 const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const processedInitialQuery = useRef(false);
   const isRequestInProgress = useRef(false);
   const historyLoaded = useRef(false);
 
-  // Load chat history from localStorage on mount
+  // Load chat history from database on mount
   useEffect(() => {
     if (historyLoaded.current) return;
     historyLoaded.current = true;
     
-    try {
-      const savedHistory = localStorage.getItem(CHAT_HISTORY_KEY);
-      if (savedHistory) {
-        const parsed = JSON.parse(savedHistory) as Message[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
+    const loadHistory = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setIsLoadingHistory(false);
+          return;
         }
+
+        const { data, error } = await supabase
+          .from('ai_chat_messages')
+          .select('id, role, content')
+          .order('created_at', { ascending: true })
+          .limit(MAX_HISTORY_MESSAGES);
+
+        if (error) {
+          console.error('Failed to load chat history:', error);
+        } else if (data && data.length > 0) {
+          setMessages(data.map(m => ({ 
+            id: m.id, 
+            role: m.role as 'user' | 'assistant', 
+            content: m.content 
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      } finally {
+        setIsLoadingHistory(false);
       }
-    } catch (error) {
-      console.error('Failed to load chat history:', error);
-    }
+    };
+
+    loadHistory();
   }, []);
 
-  // Save chat history to localStorage when messages change
-  useEffect(() => {
-    if (messages.length > 0) {
-      try {
-        // Keep only the last MAX_HISTORY_MESSAGES to prevent overflow
-        const messagesToSave = messages.slice(-MAX_HISTORY_MESSAGES);
-        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messagesToSave));
-      } catch (error) {
-        console.error('Failed to save chat history:', error);
-      }
-    }
-  }, [messages]);
+  // Save message to database
+  const saveMessage = async (message: Message): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return null;
 
-  // Clear chat history
-  const clearHistory = useCallback(() => {
-    setMessages([]);
-    localStorage.removeItem(CHAT_HISTORY_KEY);
-    toast({
-      title: 'Chat cleared',
-      description: 'Conversation history has been cleared.',
-    });
+      const { data, error } = await supabase
+        .from('ai_chat_messages')
+        .insert({
+          user_id: session.user.id,
+          role: message.role,
+          content: message.content,
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Failed to save message:', error);
+        return null;
+      }
+      return data?.id || null;
+    } catch (error) {
+      console.error('Failed to save message:', error);
+      return null;
+    }
+  };
+
+  // Clear chat history from database
+  const clearHistory = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { error } = await supabase
+          .from('ai_chat_messages')
+          .delete()
+          .eq('user_id', session.user.id);
+
+        if (error) {
+          console.error('Failed to clear chat history:', error);
+        }
+      }
+      
+      setMessages([]);
+      toast({
+        title: 'Chat cleared',
+        description: 'Conversation history has been cleared.',
+      });
+    } catch (error) {
+      console.error('Failed to clear chat history:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to clear chat history.',
+        variant: 'destructive',
+      });
+    }
   }, [toast]);
 
   useEffect(() => {
-    if (initialQuery && !processedInitialQuery.current && !isRequestInProgress.current) {
+    if (initialQuery && !processedInitialQuery.current && !isRequestInProgress.current && !isLoadingHistory) {
       processedInitialQuery.current = true;
-      // Small delay to prevent race conditions with component mounting
       const timer = setTimeout(() => {
         sendMessage(initialQuery);
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [initialQuery]);
+  }, [initialQuery, isLoadingHistory]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -118,6 +172,9 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+
+    // Save user message to database
+    saveMessage(userMessage);
 
     let assistantContent = '';
 
@@ -194,6 +251,11 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
           }
         }
       }
+
+      // Save assistant message to database after streaming completes
+      if (assistantContent) {
+        saveMessage({ role: 'assistant', content: assistantContent });
+      }
     } catch (error) {
       console.error('Nexora AI error:', error);
       toast({
@@ -258,7 +320,14 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        {messages.length === 0 && !isLoading && (
+        {isLoadingHistory && (
+          <div className="flex flex-col items-center justify-center h-full text-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground text-sm">Loading conversation...</p>
+          </div>
+        )}
+        
+        {!isLoadingHistory && messages.length === 0 && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-4">
               <Sparkles className="w-8 h-8 text-primary-foreground" />
