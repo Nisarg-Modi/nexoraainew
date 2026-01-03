@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Sparkles, Trash2, Loader2, Plus, MessageSquare, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Trash2, Loader2, Plus, MessageSquare, ChevronLeft, Pencil, Check, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -34,7 +34,10 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showConversationList, setShowConversationList] = useState(true);
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const processedInitialQuery = useRef(false);
   const isRequestInProgress = useRef(false);
@@ -154,17 +157,48 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
 
   const updateConversationTitle = async (conversationId: string, title: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('ai_chat_conversations')
         .update({ title })
         .eq('id', conversationId);
+
+      if (error) {
+        throw error;
+      }
 
       setConversations(prev =>
         prev.map(c => c.id === conversationId ? { ...c, title } : c)
       );
     } catch (error) {
       console.error('Failed to update conversation title:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to rename conversation.',
+        variant: 'destructive',
+      });
     }
+  };
+
+  const startEditingConversation = (conv: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingConversationId(conv.id);
+    setEditingTitle(conv.title);
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  };
+
+  const saveEditedTitle = async (conversationId: string) => {
+    const trimmedTitle = editingTitle.trim();
+    if (!trimmedTitle) {
+      setEditingConversationId(null);
+      return;
+    }
+    await updateConversationTitle(conversationId, trimmedTitle);
+    setEditingConversationId(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingConversationId(null);
+    setEditingTitle('');
   };
 
   const saveMessage = async (message: Message, conversationId: string): Promise<string | null> => {
@@ -466,26 +500,68 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
                 <div
                   key={conv.id}
                   className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors group"
-                  onClick={() => handleSelectConversation(conv)}
+                  onClick={() => editingConversationId !== conv.id && handleSelectConversation(conv)}
                 >
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <MessageSquare className="w-5 h-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{conv.title}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(conv.updated_at)}</p>
+                    {editingConversationId === conv.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          saveEditedTitle(conv.id);
+                        }}
+                        className="flex items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Input
+                          ref={editInputRef}
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          className="h-7 text-sm"
+                          maxLength={50}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') cancelEditing();
+                          }}
+                        />
+                        <Button type="submit" variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                          <Check className="w-4 h-4 text-primary" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={cancelEditing}>
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <p className="font-medium text-sm truncate">{conv.title}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(conv.updated_at)}</p>
+                      </>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteConversation(conv.id);
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {editingConversationId !== conv.id && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-muted-foreground hover:text-primary h-8 w-8"
+                        onClick={(e) => startEditingConversation(conv, e)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-muted-foreground hover:text-destructive h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteConversation(conv.id);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
