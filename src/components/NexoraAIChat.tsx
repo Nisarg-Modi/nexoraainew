@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Sparkles, Trash2, Loader2, Plus, MessageSquare, ChevronLeft, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Trash2, Loader2, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -36,6 +36,7 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const [showConversationList, setShowConversationList] = useState(true);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -473,6 +474,31 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
           </Button>
         </div>
 
+        {/* Search Bar */}
+        {conversations.length > 0 && !isLoadingConversations && (
+          <div className="px-3 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search conversations..."
+                className="pl-9 h-9"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Conversations List */}
         <ScrollArea className="flex-1">
           {isLoadingConversations ? (
@@ -494,78 +520,96 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
                 Start New Chat
               </Button>
             </div>
-          ) : (
-            <div className="p-2">
-              {conversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors group"
-                  onClick={() => editingConversationId !== conv.id && handleSelectConversation(conv)}
-                >
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <MessageSquare className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {editingConversationId === conv.id ? (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          saveEditedTitle(conv.id);
-                        }}
-                        className="flex items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Input
-                          ref={editInputRef}
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          className="h-7 text-sm"
-                          maxLength={50}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') cancelEditing();
+          ) : (() => {
+            const filteredConversations = conversations.filter(conv =>
+              conv.title.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+            
+            if (filteredConversations.length === 0 && searchQuery) {
+              return (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <Search className="w-10 h-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-muted-foreground text-sm">No conversations match "{searchQuery}"</p>
+                  <Button variant="link" size="sm" onClick={() => setSearchQuery('')} className="mt-2">
+                    Clear search
+                  </Button>
+                </div>
+              );
+            }
+            
+            return (
+              <div className="p-2">
+                {filteredConversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors group"
+                    onClick={() => editingConversationId !== conv.id && handleSelectConversation(conv)}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <MessageSquare className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {editingConversationId === conv.id ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            saveEditedTitle(conv.id);
                           }}
-                        />
-                        <Button type="submit" variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                          <Check className="w-4 h-4 text-primary" />
+                          className="flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Input
+                            ref={editInputRef}
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            className="h-7 text-sm"
+                            maxLength={50}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') cancelEditing();
+                            }}
+                          />
+                          <Button type="submit" variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                            <Check className="w-4 h-4 text-primary" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={cancelEditing}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </form>
+                      ) : (
+                        <>
+                          <p className="font-medium text-sm truncate">{conv.title}</p>
+                          <p className="text-xs text-muted-foreground">{formatDate(conv.updated_at)}</p>
+                        </>
+                      )}
+                    </div>
+                    {editingConversationId !== conv.id && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-muted-foreground hover:text-primary h-8 w-8"
+                          onClick={(e) => startEditingConversation(conv, e)}
+                        >
+                          <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={cancelEditing}>
-                          <X className="w-4 h-4" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-muted-foreground hover:text-destructive h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteConversation(conv.id);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
-                      </form>
-                    ) : (
-                      <>
-                        <p className="font-medium text-sm truncate">{conv.title}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(conv.updated_at)}</p>
-                      </>
+                      </div>
                     )}
                   </div>
-                  {editingConversationId !== conv.id && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 text-muted-foreground hover:text-primary h-8 w-8"
-                        onClick={(e) => startEditingConversation(conv, e)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 text-muted-foreground hover:text-destructive h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteConversation(conv.id);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </ScrollArea>
       </div>
     );
