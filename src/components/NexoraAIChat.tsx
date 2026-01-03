@@ -2,9 +2,15 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Sparkles, Trash2, Loader2, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Search } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Trash2, Loader2, Plus, MessageSquare, ChevronLeft, Pencil, Check, X, Search, Download, FileText, FileJson } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface Message {
   id?: string;
@@ -278,6 +284,84 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const handleBackToList = () => {
     setShowConversationList(true);
   };
+
+  const exportConversation = useCallback(async (format: 'text' | 'json', conversationId?: string) => {
+    try {
+      const convId = conversationId || activeConversationId;
+      if (!convId) return;
+
+      const conv = conversations.find(c => c.id === convId);
+      if (!conv) return;
+
+      // Fetch messages for export
+      const { data: messagesData, error } = await supabase
+        .from('ai_chat_messages')
+        .select('role, content, created_at')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const exportMessages = messagesData || [];
+      let content: string;
+      let filename: string;
+      let mimeType: string;
+
+      if (format === 'json') {
+        const exportData = {
+          title: conv.title,
+          exported_at: new Date().toISOString(),
+          messages: exportMessages.map(m => ({
+            role: m.role,
+            content: m.content,
+            timestamp: m.created_at
+          }))
+        };
+        content = JSON.stringify(exportData, null, 2);
+        filename = `${conv.title.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+        mimeType = 'application/json';
+      } else {
+        const lines = [
+          `# ${conv.title}`,
+          `Exported: ${new Date().toLocaleString()}`,
+          '',
+          '---',
+          '',
+          ...exportMessages.map(m => {
+            const role = m.role === 'user' ? 'You' : 'Nexora AI';
+            const time = new Date(m.created_at).toLocaleString();
+            return `[${time}] ${role}:\n${m.content}\n`;
+          })
+        ];
+        content = lines.join('\n');
+        filename = `${conv.title.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
+        mimeType = 'text/plain';
+      }
+
+      // Create and download file
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Export successful',
+        description: `Conversation exported as ${format.toUpperCase()}.`,
+      });
+    } catch (error) {
+      console.error('Failed to export conversation:', error);
+      toast({
+        title: 'Export failed',
+        description: 'Could not export the conversation.',
+        variant: 'destructive',
+      });
+    }
+  }, [activeConversationId, conversations, toast]);
 
   const sendMessage = async (messageText: string, conversationId?: string) => {
     if (!messageText.trim() || isLoading || isRequestInProgress.current) return;
@@ -584,6 +668,28 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
                     </div>
                     {editingConversationId !== conv.id && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="shrink-0 text-muted-foreground hover:text-primary h-8 w-8"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onClick={() => exportConversation('text', conv.id)}>
+                              <FileText className="w-4 h-4 mr-2" />
+                              Export as Text
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => exportConversation('json', conv.id)}>
+                              <FileJson className="w-4 h-4 mr-2" />
+                              Export as JSON
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -641,15 +747,39 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
           </div>
         </div>
         {messages.length > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => activeConversationId && deleteConversation(activeConversationId)}
-            className="shrink-0 text-muted-foreground hover:text-destructive"
-            title="Delete conversation"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-primary"
+                  title="Export conversation"
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportConversation('text')}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Export as Text
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportConversation('json')}>
+                  <FileJson className="w-4 h-4 mr-2" />
+                  Export as JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => activeConversationId && deleteConversation(activeConversationId)}
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              title="Delete conversation"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
         )}
       </div>
 
