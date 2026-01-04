@@ -80,6 +80,10 @@ const Index = () => {
             {/* Mobile: Scrollable horizontal tabs */}
             <div className="overflow-x-auto pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
             <TabsList className={`inline-flex sm:grid w-max sm:w-full gap-1 sm:gap-0 mb-4 sm:mb-6 ${isAdmin ? 'sm:grid-cols-9' : 'sm:grid-cols-8'}`}>
+                <TabsTrigger value="profile" className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
+                  <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline sm:inline">Profile</span>
+                </TabsTrigger>
                 <TabsTrigger value="contacts" className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
                   <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span className="hidden xs:inline sm:inline">Contacts</span>
@@ -95,10 +99,6 @@ const Index = () => {
                 <TabsTrigger value="voices" className="flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
                   <Mic className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span className="hidden xs:inline sm:inline">Voices</span>
-                </TabsTrigger>
-                <TabsTrigger value="profile" className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
-                  <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span className="hidden xs:inline sm:inline">Profile</span>
                 </TabsTrigger>
                 <TabsTrigger value="wallet" className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 text-xs sm:text-sm whitespace-nowrap">
                   <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
