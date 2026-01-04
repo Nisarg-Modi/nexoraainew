@@ -43,8 +43,11 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedConversationIndex, setSelectedConversationIndex] = useState(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const processedInitialQuery = useRef(false);
   const isRequestInProgress = useRef(false);
@@ -134,6 +137,82 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Filter conversations for keyboard navigation
+  const filteredConversations = conversations.filter(conv =>
+    conv.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Reset selected index when search changes
+  useEffect(() => {
+    setSelectedConversationIndex(-1);
+  }, [searchQuery]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when editing a conversation title
+      if (editingConversationId) return;
+      
+      // Ctrl+N or Cmd+N - New chat
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        handleNewChat();
+        return;
+      }
+
+      // Ctrl+K or Cmd+K - Focus search (only in conversation list)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (showConversationList && searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+        return;
+      }
+
+      // Escape - Clear search or go back to list
+      if (e.key === 'Escape') {
+        if (searchQuery) {
+          setSearchQuery('');
+          setSelectedConversationIndex(-1);
+        } else if (!showConversationList) {
+          handleBackToList();
+        }
+        return;
+      }
+
+      // Arrow navigation in conversation list
+      if (showConversationList && filteredConversations.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedConversationIndex(prev => 
+            prev < filteredConversations.length - 1 ? prev + 1 : prev
+          );
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedConversationIndex(prev => prev > 0 ? prev - 1 : 0);
+        } else if (e.key === 'Enter' && selectedConversationIndex >= 0) {
+          e.preventDefault();
+          const selectedConv = filteredConversations[selectedConversationIndex];
+          if (selectedConv) {
+            handleSelectConversation(selectedConv);
+          }
+        }
+      }
+
+      // Ctrl+/ or Cmd+/ - Focus message input (in chat view)
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        if (!showConversationList && messageInputRef.current) {
+          messageInputRef.current.focus();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showConversationList, searchQuery, filteredConversations, selectedConversationIndex, editingConversationId]);
 
   const createConversation = async (title: string = 'New Chat'): Promise<string | null> => {
     try {
@@ -561,25 +640,29 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
         {/* Search Bar */}
         {conversations.length > 0 && !isLoadingConversations && (
           <div className="px-3 pb-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search conversations..."
-                className="pl-9 h-9"
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search conversations... (Ctrl+K)"
+              className="pl-9 h-9"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 px-1">
+            Ctrl+N new chat • ↑↓ navigate • Enter select
+          </p>
           </div>
         )}
 
@@ -605,10 +688,6 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
               </Button>
             </div>
           ) : (() => {
-            const filteredConversations = conversations.filter(conv =>
-              conv.title.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-            
             if (filteredConversations.length === 0 && searchQuery) {
               return (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -621,13 +700,17 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
               );
             }
             
-            return (
-              <div className="p-2">
-                {filteredConversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 cursor-pointer transition-colors group"
-                    onClick={() => editingConversationId !== conv.id && handleSelectConversation(conv)}
+          return (
+            <div className="p-2">
+              {filteredConversations.map((conv, index) => (
+                <div
+                  key={conv.id}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors group ${
+                    selectedConversationIndex === index 
+                      ? 'bg-primary/10 ring-1 ring-primary/30' 
+                      : 'hover:bg-muted/50'
+                  }`}
+                  onClick={() => editingConversationId !== conv.id && handleSelectConversation(conv)}
                   >
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                       <MessageSquare className="w-5 h-5 text-primary" />
@@ -856,9 +939,10 @@ const NexoraAIChat = ({ onClose, initialQuery }: NexoraAIChatProps) => {
       <form onSubmit={handleSubmit} className="p-4 border-t">
         <div className="flex gap-2">
           <Input
+            ref={messageInputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
+            placeholder="Type your message... (Ctrl+/ to focus)"
             className="flex-1 rounded-full"
             disabled={isLoading}
             maxLength={10000}
