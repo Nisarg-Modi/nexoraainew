@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, Upload, User, Loader2 } from "lucide-react";
+import { Camera, Upload, User, Loader2, MessageSquare, Users, Calendar, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Camera as CapacitorCamera } from '@capacitor/camera';
@@ -13,9 +13,16 @@ import { NotificationSettings } from "./NotificationSettings";
 import { DoNotDisturbSettings } from "./DoNotDisturbSettings";
 import { LanguageSettings } from "./LanguageSettings";
 
+interface QuickStats {
+  contactsCount: number;
+  conversationsCount: number;
+  meetingsCount: number;
+}
+
 export const ProfileEditor = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [stats, setStats] = useState<QuickStats>({ contactsCount: 0, conversationsCount: 0, meetingsCount: 0 });
   const [profile, setProfile] = useState({
     display_name: "",
     status: "",
@@ -26,6 +33,7 @@ export const ProfileEditor = () => {
 
   useEffect(() => {
     loadProfile();
+    loadStats();
   }, []);
 
   const loadProfile = async () => {
@@ -50,6 +58,39 @@ export const ProfileEditor = () => {
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get contacts count
+      const { count: contactsCount } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      // Get conversations count
+      const { count: conversationsCount } = await supabase
+        .from('conversation_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      // Get meetings count
+      const { count: meetingsCount } = await supabase
+        .from('meeting_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      setStats({
+        contactsCount: contactsCount || 0,
+        conversationsCount: conversationsCount || 0,
+        meetingsCount: meetingsCount || 0
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
     }
   };
 
@@ -144,8 +185,55 @@ export const ProfileEditor = () => {
     }
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      {/* Welcome Section */}
+      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-xl p-4 sm:p-6 border border-primary/20">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold">
+              {getGreeting()}, {profile.display_name || "there"}! 👋
+            </h2>
+            <p className="text-sm text-muted-foreground">Welcome back to Nexora</p>
+          </div>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-4">
+          <div className="bg-card/50 rounded-lg p-3 text-center border border-border/50">
+            <div className="flex justify-center mb-1">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            </div>
+            <p className="text-lg sm:text-xl font-bold">{stats.contactsCount}</p>
+            <p className="text-xs text-muted-foreground">Contacts</p>
+          </div>
+          <div className="bg-card/50 rounded-lg p-3 text-center border border-border/50">
+            <div className="flex justify-center mb-1">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            </div>
+            <p className="text-lg sm:text-xl font-bold">{stats.conversationsCount}</p>
+            <p className="text-xs text-muted-foreground">Chats</p>
+          </div>
+          <div className="bg-card/50 rounded-lg p-3 text-center border border-border/50">
+            <div className="flex justify-center mb-1">
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+            </div>
+            <p className="text-lg sm:text-xl font-bold">{stats.meetingsCount}</p>
+            <p className="text-xs text-muted-foreground">Meetings</p>
+          </div>
+        </div>
+      </div>
+
       <div className="text-center space-y-2 sm:space-y-4">
         <h2 className="text-xl sm:text-2xl font-bold">Edit Profile</h2>
         <p className="text-sm sm:text-base text-muted-foreground">Update your profile picture and status</p>
